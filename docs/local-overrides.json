@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-10-11",
+  "upstream": {
+    "url": "https://github.com/prolet1966/QQ-Agent-for-Linux.git",
+    "commit": "da6f0560c1c7530a985bb4c1542a88cae104b80e",
+    "tag": "upstream-linux-base-20261007"
+  },
+  "localBaselineTag": "local-docker-20261011",
+  "features": [
+    {
+      "id": "L01",
+      "title": "Docker运行时和环境隔离",
+      "files": [
+        "Dockerfile",
+        "compose.yaml",
+        ".dockerignore",
+        ".env.example",
+        "scripts/docker-init.mjs",
+        "src/docker-server.js",
+        "src/docker-env.js",
+        "src/server.js",
+        "src/app.js",
+        "skills/image-generate/index.js"
+      ],
+      "tests": [
+        "test/docker-channel.test.mjs",
+        "test/docker-http.test.mjs",
+        "test/docker-console-network.test.mjs"
+      ],
+      "mustPreserve": [
+        "non-root + read-only root + writable data volume",
+        "environment secrets never persisted",
+        "no desktop autostart or startup model warmup"
+      ]
+    },
+    {
+      "id": "L02",
+      "title": "官方QQ通道和字符串ID",
+      "files": [
+        "src/qqbot.js",
+        "src/app.js",
+        "src/config.js",
+        "src/store.js",
+        "src/memory.js",
+        "src/tools.js",
+        "src/tool-registry.js",
+        "src/sender.js",
+        "ui/app/00-core.js",
+        "ui/app/01-boot.js",
+        "ui/app/05-memory-settings.js",
+        "ui/app/06-settings-render.js",
+        "ui/app/07-settings-events.js"
+      ],
+      "tests": [
+        "test/docker-channel.test.mjs",
+        "test/docker-sdk.test.mjs",
+        "test/docker-agent.test.mjs",
+        "test/docker-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "OpenID and message IDs remain strings",
+        "allowlist before body storage",
+        "media realpath boundary and no bypass fallback"
+      ]
+    },
+    {
+      "id": "L03",
+      "title": "局域网鉴权和诊断",
+      "files": [
+        "src/console-auth.js",
+        "src/docker-env.js",
+        "src/app.js",
+        "src/qqbot.js",
+        "ui/login.html",
+        "ui/login.js",
+        "ui/connection.js",
+        "compose.yaml"
+      ],
+      "tests": [
+        "test/docker-console-network.test.mjs",
+        "test/docker-http.test.mjs",
+        "test/docker-channel.test.mjs"
+      ],
+      "mustPreserve": [
+        "explicit Host and same-origin guard",
+        "token required on LAN",
+        "QQ source IP and local Host allowlists are distinct"
+      ]
+    },
+    {
+      "id": "L04",
+      "title": "扫码授权",
+      "files": [
+        "src/qqbot-login.js",
+        "src/qqbot-login-routes.js",
+        "src/app.js",
+        "ui/connection.js",
+        "package.json",
+        "package-lock.json"
+      ],
+      "tests": [
+        "test/docker-qq-login.test.mjs",
+        "test/docker-profiles-http.test.mjs",
+        "test/docker-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "QR authorization requires explicit save confirmation",
+        "no credentials in status/logs",
+        "cancel and stale callbacks cannot apply"
+      ]
+    },
+    {
+      "id": "L05",
+      "title": "多机器人隔离切换",
+      "files": [
+        "src/robot-profiles.js",
+        "src/robot-profile-routes.js",
+        "src/config.js",
+        "src/docker-server.js",
+        "src/app.js",
+        "ui/profile-context.js",
+        "ui/connection.js"
+      ],
+      "tests": [
+        "test/docker-profiles.test.mjs",
+        "test/docker-profiles-http.test.mjs",
+        "test/docker-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "shared-models separated from per-robot data",
+        "restart on switch and stale-page 409",
+        "migration preserves originals and rejects unsafe paths"
+      ]
+    },
+    {
+      "id": "L06",
+      "title": "群@识别和提示词",
+      "files": [
+        "src/qqbot.js",
+        "src/app.js",
+        "src/prompt.js",
+        "src/orchestrator.js",
+        "src/store.js",
+        "ui/connection.js"
+      ],
+      "tests": [
+        "test/docker-mention-prompt.test.mjs",
+        "test/docker-channel.test.mjs",
+        "test/docker-sdk.test.mjs",
+        "test/docker-agent.test.mjs"
+      ],
+      "mustPreserve": [
+        "officialAtMe survives stripped content",
+        "no false self mention for other people",
+        "ingress diagnostics do not claim a reply was sent"
+      ]
+    },
+    {
+      "id": "L07",
+      "title": "可写扩展安装",
+      "files": [
+        "src/module-paths.js",
+        "src/module-import.js",
+        "src/plugin-loader.js",
+        "src/market.js",
+        "src/zip-install.js",
+        "src/routes.js",
+        "doc/extend_development/skill-development.md",
+        "doc/extend_development/plugin-development.md",
+        "doc/extend_development/skill-reference.md",
+        "doc/extend_development/snowluma-capabilities.md"
+      ],
+      "tests": [
+        "test/docker-skills.test.mjs"
+      ],
+      "mustPreserve": [
+        "install under current profile extensions, not /app",
+        "validate ZIP paths/size and preserve bundled modules",
+        "safe ESM compatibility links"
+      ]
+    },
+    {
+      "id": "L08",
+      "title": "ComfyUI Turbo技能",
+      "files": [
+        "examples/skills/comfy-draw/index.js",
+        "examples/skills/comfy-draw/skill.json",
+        "examples/skills/comfy-draw/lib/qwen21-engine.js",
+        "examples/skills/comfy-draw/lib/qwen21-runtime.js",
+        "examples/skills/comfy-draw/README.md",
+        "scripts/qwen21-turbo-benchmark.mjs",
+        "scripts/comfy-draw-smoke.mjs"
+      ],
+      "tests": [
+        "test/comfy-draw.test.mjs"
+      ],
+      "mustPreserve": [
+        "text/edit/result workflows with exact Turbo sigmas",
+        "same-chat references only",
+        "idempotent jobs and no blind resubmission"
+      ]
+    },
+    {
+      "id": "L09",
+      "title": "Steam史低技能",
+      "files": [
+        "examples/skills/steam-deals/index.js",
+        "examples/skills/steam-deals/skill.json",
+        "examples/skills/steam-deals/steam-data-v150.js",
+        "examples/skills/steam-deals/steam-runtime-v150.js",
+        "examples/skills/steam-deals/game-names-v150.js",
+        "examples/skills/steam-deals/README.md"
+      ],
+      "tests": [
+        "test/steam-deals.test.mjs"
+      ],
+      "mustPreserve": [
+        "native HTTP instead of curl.exe",
+        "Steam storeLow not all-store historical low",
+        "source failure is not a zero-deal success"
+      ]
+    },
+    {
+      "id": "L10",
+      "title": "引用图片和可见回复",
+      "files": [
+        "src/qqbot-quotes.js",
+        "src/message-quotes.js",
+        "src/reply-completion.js",
+        "src/qqbot.js",
+        "src/app.js",
+        "src/store.js",
+        "src/tools.js",
+        "src/prompt.js",
+        "src/orchestrator.js"
+      ],
+      "tests": [
+        "test/docker-quotes.test.mjs",
+        "test/docker-quote-agent.test.mjs",
+        "test/docker-reply-completion.test.mjs",
+        "test/docker-reply-completion-agent.test.mjs"
+      ],
+      "mustPreserve": [
+        "quoted media persisted separately and scoped to chat",
+        "refMsgIdx is not a sendable message ID",
+        "one bounded reminder, never publish reasoning",
+        "zero-tool direct mention/private endings nudge once within round budget; no nudge for sent/finish/passive runs"
+      ]
+    },
+    {
+      "id": "L11",
+      "title": "并发回复绑定",
+      "files": [
+        "src/qqbot.js",
+        "src/sender.js",
+        "src/orchestrator.js",
+        "src/tools.js",
+        "src/prompt.js"
+      ],
+      "tests": [
+        "test/docker-reply-routing.test.mjs",
+        "test/docker-reply-routing-agent.test.mjs",
+        "test/docker-mention-prompt.test.mjs",
+        "test/docker-sdk.test.mjs"
+      ],
+      "mustPreserve": [
+        "freeze run context and route at enqueue time",
+        "explicit target for multi-user trigger batches",
+        "display # normalized only for exact same-chat IDs before queue/dedupe; no fuzzy match",
+        "expired/conflicting route fails instead of borrowing newer target"
+      ]
+    },
+    {
+      "id": "L12",
+      "title": "删除机器人和favicon",
+      "files": [
+        "src/robot-profiles.js",
+        "src/robot-profile-routes.js",
+        "src/app.js",
+        "ui/connection.js",
+        "ui/connection.html",
+        "ui/connection.css",
+        "ui/favicon.ico",
+        "ui/favicon.png",
+        "ui/index.html",
+        "ui/landing.html",
+        "ui/login.html",
+        "ui/persona-plaza/index.html",
+        "ui/plugin-market/index.html",
+        "ui/skill-market/index.html"
+      ],
+      "tests": [
+        "test/docker-profiles.test.mjs",
+        "test/docker-profiles-http.test.mjs",
+        "test/docker-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "typed AppID soft deletion preserves data",
+        "active deletion transitions to setup, no auto-switch",
+        "icons served across all HTML entrances"
+      ]
+    },
+    {
+      "id": "L13",
+      "title": "多模型管理",
+      "files": [
+        "src/connection-models.js",
+        "src/providers.js",
+        "src/routes.js",
+        "ui/connection-models.js",
+        "ui/connection.js",
+        "ui/connection.html",
+        "ui/connection.css"
+      ],
+      "tests": [
+        "test/docker-connection-models.test.mjs"
+      ],
+      "mustPreserve": [
+        "fetch/test/save/select with no QQ send",
+        "keep previous manual model and advanced settings",
+        "exact-endpoint credentials, no redirect or global-key leak"
+      ]
+    },
+    {
+      "id": "L14",
+      "title": "维护与提交检查",
+      "files": [
+        "AGENTS.md",
+        "docs/LOCAL-CUSTOMIZATIONS.md",
+        "docs/UPSTREAM-MAINTENANCE.md",
+        "docs/local-overrides.json",
+        "scripts/check-local-overrides.mjs",
+        ".gitignore",
+        "README.md"
+      ],
+      "tests": [
+        "test/docker-maintenance.test.mjs"
+      ],
+      "mustPreserve": [
+        "Git history rooted in verified upstream commit",
+        "no runtime data or credentials in Git index",
+        "no publishing until explicit user approval"
+      ]
+    },
+    {
+      "id": "L15",
+      "title": "看板不可用状态说明",
+      "files": [
+        "ui/app/00-core.js",
+        "ui/app/13-panels.js",
+        "docs/panels-interface.md"
+      ],
+      "tests": [
+        "test/docker-panels-ui.test.mjs"
+      ],
+      "mustPreserve": [
+        "unavailable panel shows reason without fetching details or enabling providers",
+        "HTTP errors preserve error/reason before generic status",
+        "escape panel state and ignore stale detail responses"
+      ]
+    },
+    {
+      "id": "L16",
+      "title": "干净源码快照与GHCR发布",
+      "files": [
+        "compose.release.yaml",
+        ".github/workflows/publish-image.yml",
+        "scripts/release-smoke.sh",
+        "THIRD_PARTY_NOTICES.md",
+        "docs/PUBLISHING.md",
+        ".dockerignore"
+      ],
+      "tests": [
+        "test/docker-release.test.mjs"
+      ],
+      "mustPreserve": [
+        "publish only audited public history, never private integration ancestry",
+        "native amd64 and arm64 tests before publishing a multi-platform image",
+        "release compose preserves authentication and data isolation",
+        "third-party licensing is separate; no runtime data or personal avatar originals in images"
+      ]
+    }
+  ]
+}

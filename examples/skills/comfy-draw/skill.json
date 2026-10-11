@@ -1,0 +1,36 @@
+{
+  "id": "comfy-draw",
+  "name": "本地绘图 (ComfyUI)",
+  "version": "2.0.0",
+  "author": "QQ Agent",
+  "apiVersion": 1,
+  "category": "media",
+  "description": "Qwen-Image-2.1-Turbo：文生图、参考图编辑、已生成图片补发。Docker 通过局域网访问 ComfyUI，无需挂载 Mac 目录。",
+  "enabledByDefault": false,
+  "permissions": ["web_fetch"],
+  "settings": {
+    "baseUrl": "http://host.docker.internal:9000",
+    "modelName": "qwen_image_2.1_turbo_bf16.safetensors",
+    "clipName": "qwen3vl_8b_int8_convrot.safetensors",
+    "vaeName": "qwen_image_2.1_vae_bf16.safetensors",
+    "defaultSize": "768x768",
+    "editResolution": 768,
+    "notifyStart": true,
+    "timeoutMs": 240000,
+    "maxImageMB": 12,
+    "keepImages": 200
+  },
+  "configSchema": {
+    "baseUrl": {"type":"string","label":"ComfyUI 地址","default":"http://host.docker.internal:9000","description":"Docker 访问 Mac 的局域网地址。服务需保持开启；不会从容器启动宿主机程序。仅在受信任局域网开放。"},
+    "modelName": {"type":"string","label":"Turbo 扩散模型","default":"qwen_image_2.1_turbo_bf16.safetensors","description":"只用于 Qwen-Image-2.1-Turbo 三件套；固定官方 8 步 sigma、Euler、CFG=1，不兼容普通 2.1、GGUF 或整合模型。"},
+    "clipName": {"type":"string","label":"文本编码器","default":"qwen3vl_8b_int8_convrot.safetensors"},
+    "vaeName": {"type":"string","label":"VAE","default":"qwen_image_2.1_vae_bf16.safetensors"},
+    "defaultSize": {"type":"string","label":"默认文生图尺寸","default":"768x768","description":"768x768 速度优先；1024x1024 高清；640x960 竖图；960x640 横图。最多约 100 万像素。"},
+    "editResolution": {"type":"number","label":"改图像素预算边长","default":768,"min":768,"max":1024,"step":256,"description":"768 或 1024；保持参考图宽高比，总像素约为此值的平方。"},
+    "notifyStart": {"type":"boolean","label":"开始前发送等待提示","default":true},
+    "timeoutMs": {"type":"number","label":"等待出图超时（毫秒）","default":240000,"min":30000,"max":600000,"step":1000,"description":"超时保留任务编号；查询结果不重复生成，不会中断其他 ComfyUI 任务。"},
+    "maxImageMB": {"type":"number","label":"单张上传/下载上限（MB）","default":12,"min":1,"max":20,"step":1},
+    "keepImages": {"type":"number","label":"保留已发送图片数量","default":200,"min":20,"max":1000,"step":1,"description":"保存在当前机器人的 media/comfy-draw；等待中及发送未确认的图片不自动删除。"}
+  },
+  "prompt": {"sections":[{"id":"comfy-draw-note","title":"本地绘图","priority":40,"content":"用户明确要求生成图片时用 comfy-draw__local_draw；修改用户图片或刚生成的图时用 comfy-draw__local_edit。中英文自然语言均可，准确保留用户要求，不拼旧模型的质量标签。工具直接发图；不要再次发送或编造图片细节。参考图片只从当前会话获取。超时/发送未确认时记录任务编号，用 comfy-draw__local_draw_result 查询，勿自动重复生成或转用云端。"}]}
+}

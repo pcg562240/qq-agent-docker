@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>连接设置 · QQ Agent Docker</title>
+<link rel="icon" href="/favicon.ico?v=20261011" type="image/x-icon" sizes="16x16 24x24 32x32 48x48 64x64 128x128 256x256">
+<link rel="icon" type="image/png" href="/favicon.png?v=20261011" sizes="256x256">
+<link rel="apple-touch-icon" href="/favicon.png?v=20261011"><link rel="stylesheet" href="/connection.css"><script src="/connection.js" type="module"></script></head>
+<body><main><header><div><div class="eyebrow">QQ AGENT / DOCKER</div><h1>连接你的机器人</h1><div class="muted">官方 QQ 通道，无需运行 QQ 桌面客户端。</div></div><a href="/">返回完整控制台 ↗</a></header>
+<div id="status" role="status">正在读取连接状态…</div>
+<p id="connection-help" class="muted" role="status" hidden></p>
+<form id="settings"><div class="grid">
+<section id="robot-profiles" class="wide" hidden>
+<div class="profile-heading"><h2>已保存的机器人</h2><span id="active-robot" class="badge"></span></div>
+<p class="muted small">可保存多个机器人，每次只启用一个。凭据、白名单、聊天、记忆和会话独立；模型服务共用。切换会重启服务并刷新页面，请先保存其他未提交的设置。</p>
+<div class="profile-picker"><label>选择机器人<select id="robot-select" aria-label="已保存的机器人"></select></label><button id="robot-switch" type="button">切换到所选机器人</button><button id="robot-delete" type="button" class="danger">删除机器人</button></div>
+<p class="muted small">删除仅移出列表并停止使用，不注销腾讯平台的机器人。原配置、凭据、技能和聊天数据保留在数据卷；重新添加同一 AppID 可恢复，不会自动接管其他机器人的数据。</p>
+<p id="profile-environment" class="muted small" hidden>当前凭据由环境变量管理。请清空 .env 的 QQBOT_APP_ID / QQBOT_APP_SECRET 并重新创建容器后管理多个机器人。</p>
+<details id="profile-manual"><summary>新增机器人 / 更新其他机器人的凭据</summary>
+<div class="profile-fields"><label>显示名称（可选）<input id="new-name" maxlength="80" placeholder="例如：日常助手 / 测试机器人"></label>
+<label>AppID<input id="new-app-id" inputmode="numeric" autocomplete="off" maxlength="32" placeholder="填写新机器人或已保存的 AppID"></label>
+<label>AppSecret<input id="new-secret" type="password" autocomplete="new-password" placeholder="全新机器人必填；已保存 / 曾删除的留空保留"></label></div>
+<div class="actions"><button id="robot-save" type="button">保存机器人</button><button id="robot-save-switch" type="button" class="secondary">保存并切换</button></div>
+</details><p id="profile-message" role="status" aria-live="polite"></p></section>
+<section id="official"><h2>01 · QQ 龙虾机器人</h2>
+<p class="muted small">推荐手机 QQ 扫码授权，无需手填 AppID / AppSecret。授权成功后，请确认保存；扫码本身不会覆盖现有配置。</p>
+<div class="actions qr-actions"><button id="qr-start" type="button">生成 QQ 授权二维码</button><button id="qr-cancel" type="button" class="secondary" hidden>取消扫码</button></div>
+<div id="qr-panel" hidden>
+<img id="qr-image" class="qr-image" width="320" height="320" alt="请用手机 QQ 扫描授权二维码" hidden>
+<p id="qr-status" class="muted" role="status" aria-live="polite"></p>
+<div id="qr-confirm-panel" hidden>
+<label>本次授权的机器人<select id="qr-account"></select></label>
+<label class="check"><input id="qr-allow-user" type="checkbox" checked>允许扫码账号与机器人私聊</label>
+<button id="qr-confirm" type="button">确认保存并连接</button>
+</div></div>
+<details class="manual-login"><summary>当前机器人凭据（备用）</summary>
+<label>AppID<input id="appId" inputmode="numeric" autocomplete="off" placeholder="QQ 开放平台的应用 ID"></label>
+<label>AppSecret<input id="secret" type="password" autocomplete="new-password" placeholder="留空保留已有密钥"></label>
+</details>
+<label class="check"><input id="enabled" type="checkbox">启用官方 QQ 通道</label>
+<label class="check"><input id="requireMention" type="checkbox" checked>群聊只接收 @ 机器人的消息</label>
+<p id="identity-help" class="muted small">若在 .env 填写凭据，它们会优先于此处配置。支持文字、图片；加群及全量群消息以平台权限为准。</p></section>
+<section id="model-settings"><h2>02 · 模型服务 <span id="shared-model-label" class="badge" hidden>所有机器人共用</span></h2>
+<div class="model-current"><strong id="active-model">正在读取当前模型…</strong><div id="active-model-endpoint" class="muted small"></div></div>
+<label>已保存模型<select id="saved-model" aria-label="已保存模型" disabled><option value="">正在加载…</option></select></label>
+<div class="actions model-actions"><button id="model-use" type="button" disabled>启用所选模型</button><button id="model-new" type="button" class="secondary" disabled>新增模型</button></div>
+<p class="muted small">选择仅载入表单，点击启用才切换。不同服务独立保存 Key；同一服务下的模型共用该服务的 Key。完整控制台的模型目录也会同步。</p>
+<label>API Base URL<input id="baseUrl" type="url" placeholder="https://你的服务地址/v1"></label>
+<label>API Key<input id="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已有密钥"></label>
+<label>模型名称<input id="model" autocomplete="off" placeholder="点击获取模型列表，或手动填写模型 ID"></label>
+<div class="actions model-actions"><button id="model-fetch" type="button" class="secondary" disabled>获取模型列表</button><button id="model-test" type="button" class="secondary" disabled>连接测试</button></div>
+<label id="model-list-label" hidden>服务返回的模型<select id="model-list" aria-label="服务返回的模型"></select></label>
+<div class="actions model-actions"><button id="model-save" type="button" class="secondary" disabled>只保存，不启用</button><button id="model-save-use" type="button" disabled>保存并启用</button></div>
+<p id="model-message" role="status" aria-live="polite"></p>
+<p class="muted small">连接测试会消耗少量模型额度，不向 QQ 发送消息。不支持获取列表的服务可手动填写模型 ID。切换主模型时，视觉 / 视频专用模型等高级设置保持不变。</p>
+<p class="muted small">使用 OpenAI 兼容协议。Mac 本机的模型服务在容器内通常使用 host.docker.internal，而不是 localhost。</p></section>
+<section><h2>03 · 可用私聊</h2><label>允许的用户 OpenID<textarea id="private" placeholder="每行一个 OpenID"></textarea></label>
+<p class="muted small">默认不开放任何会话。先向机器人发一句消息，在下方发现列表中添加，再重新发消息。</p></section>
+<section><h2>04 · 可用群聊</h2><label>允许的群 OpenID<textarea id="groups" placeholder="每行一个群 OpenID，不是数字 QQ 群号"></textarea></label>
+<p class="muted small">仅在机器人具有加群权限时有效。入群后 @ 一次，群标识会出现在下方。无需 @ 模式还受完整控制台的响应档位限制。</p></section>
+<section class="wide"><h2>最近发现的会话</h2><div id="peers" class="muted">暂无。等待 QQ 推送事件后可添加白名单。</div>
+<p class="muted small">这里仅列已观察到的会话，不是完整好友或群列表。未授权会话只记录标识，不存聊天正文、不调用模型。</p></section>
+</div><div class="actions"><button id="save" type="submit">保存并应用</button><button id="refresh" type="button" class="secondary">刷新连接状态</button><button id="logout" type="button" class="secondary">退出登录</button></div>
+<p id="message" role="status"></p></form><p class="muted small">OneBot 模式请在 .env 设置 QQ_AGENT_CHANNEL=onebot 和外部服务地址，然后重新创建容器。本镜像不包含 NapCat / SnowLuma。</p>
+</main>
+<dialog id="robot-delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+<form id="robot-delete-form">
+<h2 id="delete-title">删除机器人？</h2>
+<p id="delete-description">将从已保存列表移除 <strong id="delete-robot-name"></strong>。这不是腾讯平台注销，也不会清空磁盘数据。</p>
+<p class="muted small">原凭据、配置、白名单、聊天、记忆和技能仍保留在数据卷。之后重新添加同一 AppID 可恢复。共享模型设置和其他机器人不受影响。</p>
+<p id="delete-active-warning" class="warning" hidden>这是当前启用的机器人。确认后会停止连接、中止当前任务并重启服务，回到未配置状态；不会自动切换到其他机器人。</p>
+<label for="delete-confirm-id">请输入要删除的 AppID 确认<input id="delete-confirm-id" inputmode="numeric" autocomplete="off" maxlength="32" required></label>
+<p id="delete-error" role="alert"></p>
+<div class="actions"><button id="robot-delete-cancel" type="button" class="secondary">取消</button><button id="robot-delete-confirm" type="submit" class="danger" disabled>确认删除（保留数据）</button></div>
+</form></dialog>
+</body></html>

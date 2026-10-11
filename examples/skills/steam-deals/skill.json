@@ -1,0 +1,126 @@
+{
+  "id": "steam-deals",
+  "name": "Steam 史低好价",
+  "version": "1.5.0",
+  "apiVersion": 1,
+  "category": "utility",
+  "description": "查询中国区 Steam 当前折扣，按 Steam 本店历史低价标记新史低/平史低；普通折扣、未知史低和数据源故障分别显示。支持分类、评测门槛、货币换算。兼容 Docker/macOS 与官方 QQ。",
+  "author": "为 QQ Agent 定制",
+  "entry": "index.js",
+  "enabledByDefault": true,
+  "capabilities": [],
+  "requires": [],
+  "_note_deps": [
+    "Node.js 原生 HTTPS 请求，无 curl.exe/curl 依赖，不自动启动代理。",
+    "ITAD 使用中国区 shops=61 的 Steam storeLow，不将全商店最低价混入 Steam 史低。",
+    "官方 QQ 用文字清单加至多一张封面；OneBot 保留逐款图文。",
+    "Linux/macOS 不调用旧 Windows Pixiv 助手；API Key 与用户配置保留。"
+  ],
+  "settings": {
+    "enabled": true,
+    "mentionOnly": true,
+    "itadKey": "",
+    "currency": "CNY",
+    "maxItems": 10,
+    "perBubble": 10,
+    "pixivImage": true,
+    "rotatePages": 2,
+    "minReviews": 5000,
+    "maxCandidates": 70,
+    "searchPages": 2,
+    "showCover": true,
+    "showLink": false
+  },
+  "configSchema": {
+    "enabled": {
+      "type": "boolean",
+      "label": "启用 Steam 史低好价",
+      "description": "总开关。关掉后模型连工具都看不到。"
+    },
+    "mentionOnly": {
+      "type": "boolean",
+      "label": "群里只在被点名时给",
+      "description": "默认开。开着时群里必须 @ 机器人（或拍一拍它）才会查折扣，普通聊天不会自己冒出来；私聊不受影响。"
+    },
+    "itadKey": {
+      "type": "string",
+      "label": "ITAD API Key",
+      "description": "IsThereAnyDeal API Key；用于核实 Steam 商店历史最低价。留空不修改已保存密钥。",
+      "secret": true
+    },
+    "currency": {
+      "type": "string",
+      "label": "计价货币",
+      "description": "中国区 Steam 价格按汇率换算显示，不是其他地区实际售价。支持 CNY、USD、UAH 等。"
+    },
+    "perBubble": {
+      "type": "number",
+      "label": "每个气泡放几款",
+      "description": "OneBot 的每气泡条目数；官方 QQ 合并为文字清单，由核心控制长度。"
+    },
+    "pixivImage": {
+      "type": "boolean",
+      "label": "结尾补一张二次元图",
+      "description": "仅 Windows + OneBot 兼容旧 Pixiv 配图助手。Docker/macOS/官方 QQ 自动跳过；不影响价格查询。"
+    },
+    "showCover": {
+      "type": "boolean",
+      "label": "附游戏封面",
+      "description": "官方 QQ：文字清单后单独发第一款封面，避免不支持的混合消息及刷屏。OneBot：每款后附封面。"
+    },
+    "maxItems": {
+      "type": "number",
+      "label": "最多列几款",
+      "description": "默认 10。范围 5~20。"
+    },
+    "rotatePages": {
+      "type": "number",
+      "label": "每次换一批的轮转范围（页）",
+      "description": "默认 2，即每次 @ 都在「Steam 畅销榜前 100 名」里换一批。调大＝花样更多，但会翻到榜单尾部、混进不太出名的游戏（实测第 3 页开始出现 SimplePlanes 这类小品）。想每次都换得彻底就调到 3，想每批都最热门就调到 1。"
+    },
+    "minReviews": {
+      "type": "number",
+      "label": "冷门门槛（总评测数）",
+      "description": "总评测数门槛，默认 5000。0 表示不设数量门槛。评测查询失败会单独报告，不会自动放宽门槛。"
+    },
+    "maxCandidates": {
+      "type": "number",
+      "label": "每轮最多检查几款",
+      "description": "默认 70。候选池先按折扣力度粗排再截断，控制评测与价格的请求量。调大更全但更慢。"
+    },
+    "searchPages": {
+      "type": "number",
+      "label": "特惠列表翻页数",
+      "description": "默认 2（每页 50 条）。翻得越多候选越全，但耗时增加。"
+    },
+    "showLink": {
+      "type": "boolean",
+      "label": "附上 Steam 链接",
+      "description": "默认关。开启后每条后面加一行商店直达链接（消息会变长一些）。"
+    }
+  },
+  "prompt": {
+    "sections": [
+      {
+        "id": "steam-deals-usage",
+        "title": "Steam 史低好价",
+        "priority": 40,
+        "content": "用户询问 Steam 折扣、史低、值得买的游戏时使用 steam-deals__deals。用户指定分类才传 genre，count 为 5~20，currency 只临时换算中国区价格。工具自己发送清单：status ok/no-results 后不要复述或补推荐，直接结束；status error 则如实解释故障，不要说成没有折扣。群聊只在被点名时调用，私聊正常。史低基于 ITAD 收录的中国区 Steam 本店记录；普通折扣和史低待核实不算史低。连续查询按会话/分类轮转，可能重叠。用户明确要求改默认货币时调用 steam-deals__currency。"
+      }
+    ]
+  },
+  "triggers": {
+    "when": "私聊里问到，或群里被 @ / 拍了拍之后问 Steam 近期折扣、史低好价、什么游戏值得买",
+    "examples": [
+      "Steam 最近有什么打折的",
+      "有没有史低好价",
+      "最近什么游戏值得买",
+      "Steam 折扣",
+      "@机器人 帮我看看 steam 打折",
+      "有什么便宜的好游戏"
+    ]
+  },
+  "permissions": [
+    "web_fetch"
+  ]
+}

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · QQ Agent Docker</title>
+<link rel="icon" href="/favicon.ico?v=20261011" type="image/x-icon" sizes="16x16 24x24 32x32 48x48 64x64 128x128 256x256">
+<link rel="icon" type="image/png" href="/favicon.png?v=20261011" sizes="256x256">
+<link rel="apple-touch-icon" href="/favicon.png?v=20261011"><link rel="stylesheet" href="/connection.css"><script src="/login.js" defer></script></head>
+<body><main class="login"><div class="eyebrow">QQ AGENT / DOCKER</div><h1>你的 QQ 智能助手</h1>
+<p class="muted">输入控制台密码。机器人密钥和模型密钥在登录后配置；局域网访问请仅使用可信网络。</p>
+<form id="login"><label>控制台密码<input id="token" type="password" autocomplete="current-password" required></label>
+<button type="submit">进入控制台 →</button></form><p id="message" role="status"></p>
+<p class="muted small">密码位于项目 .env 文件的 QQ_AGENT_CONSOLE_TOKEN。首次运行：npm run docker:init。</p>
+</main></body></html>

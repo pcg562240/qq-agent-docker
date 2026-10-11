@@ -1,0 +1,38 @@
+name: qq-agent
+services:
+  qq-agent:
+    image: qq-agent-docker:local
+    build:
+      context: .
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${QQ_AGENT_BIND_ADDRESS:-127.0.0.1}:${QQ_AGENT_PORT:-3210}:3210"
+    environment:
+      QQ_AGENT_CONSOLE_TOKEN: ${QQ_AGENT_CONSOLE_TOKEN:?Run npm run docker:init first}
+      QQ_AGENT_ALLOWED_HOSTS: ${QQ_AGENT_ALLOWED_HOSTS:-}
+      QQ_AGENT_CHANNEL: ${QQ_AGENT_CHANNEL:-qqbot}
+      QQBOT_APP_ID: ${QQBOT_APP_ID:-}
+      QQBOT_APP_SECRET: ${QQBOT_APP_SECRET:-}
+      ONEBOT_WS_URL: ${ONEBOT_WS_URL:-ws://host.docker.internal:3001}
+      ONEBOT_HTTP_URL: ${ONEBOT_HTTP_URL:-http://host.docker.internal:3000}
+      ONEBOT_ACCESS_TOKEN: ${ONEBOT_ACCESS_TOKEN:-}
+      ONEBOT_HTTP_TOKEN: ${ONEBOT_HTTP_TOKEN:-}
+      TZ: Asia/Shanghai
+    volumes:
+      - qq-agent-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  qq-agent-data:

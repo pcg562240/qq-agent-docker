@@ -1,0 +1,25 @@
+**
+!package.json
+!package-lock.json
+!prices.json
+!LICENSE
+!src/
+!src/**
+!ui/
+!ui/**
+!assets/
+!assets/**
+!plugins/
+!plugins/**
+!skills/
+!skills/**
+**/node_modules
+**/.env*
+**/*.log
+**/*.db
+**/*.sqlite*
+**/.DS_Store
+
+# Generated personal avatars are not application assets.
+assets/avatars/
+!THIRD_PARTY_NOTICES.md
