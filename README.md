@@ -14,10 +14,10 @@
 
 - GitHub：[pcg562240/qq-agent-docker](https://github.com/pcg562240/qq-agent-docker)
 - 镜像：`ghcr.io/pcg562240/qq-agent-docker:0.4.7-docker.1`，提供 `linux/amd64` 与 `linux/arm64`。
-- [下载 Release 部署附件](https://github.com/pcg562240/qq-agent-docker/releases/latest)：`compose.yaml`、`.env.example`、校验文件。
+- [下载 Release 部署附件](https://github.com/pcg562240/qq-agent-docker/releases/latest)：`compose.yaml`、`env.example`、校验文件。
 - 仓库内的 [compose.release.yaml](compose.release.yaml) 对应上述预构建部署；根目录 `compose.yaml` 仍用于本地源码构建。
 
-无需安装本机 Node.js。在**新建空目录**保存部署文件，将 `.env.example` 复制为 `.env`，填写随机控制台密码（可用 `openssl rand -hex 32` 生成），然后：
+无需安装本机 Node.js。在**新建空目录**保存部署文件，将 Release 附件 `env.example`（源码中为 `.env.example`）复制为 `.env`，填写随机控制台密码（可用 `openssl rand -hex 32` 生成），然后：
 
 ```bash
 docker compose pull

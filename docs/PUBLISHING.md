@@ -44,12 +44,12 @@ git push origin refs/tags/v0.4.7-docker.1
 - 测试通过才推送架构标签；两个架构都成功后合成版本及 `latest` manifest。
 - 使用仓库的短期 `GITHUB_TOKEN`（仅 `contents: read`、`packages: write`），不上传本机登录 token、QQ 凭据或 API Key。Actions 固定 commit SHA；升级前审核。
 - GHCR 首次发布默认可能为 private；在包设置中确认 public，最后用没有 Docker 登录配置的客户端验证匿名拉取。
-- GitHub Release 附上 `compose.yaml`（来自 `compose.release.yaml`）、`.env.example` 和 `SHA256SUMS`；不附带实际 `.env`。
+- GitHub Release 附上 `compose.yaml`（来自 `compose.release.yaml`）、`env.example`（来自源码 `.env.example`）和 `SHA256SUMS`；不附带实际 `.env`。附件使用非隐藏名称，避免 GitHub 自动重命名带前导点的文件；校验清单使用附件最终名称。
 - 分别验证两个 manifest 架构，不把构建成功或 `/healthz` 当作真实 QQ / 模型收发测试。
 
 ## 使用预构建版本
 
-在一个新的空目录中下载 Release 的 `compose.yaml` 与 `.env.example`。复制示例为 `.env`，填写随机的 `QQ_AGENT_CONSOLE_TOKEN`，然后：
+在一个新的空目录中下载 Release 的 `compose.yaml` 与 `env.example`。复制示例为 `.env`，填写随机的 `QQ_AGENT_CONSOLE_TOKEN`，然后：
 
 ```bash
 docker compose pull
