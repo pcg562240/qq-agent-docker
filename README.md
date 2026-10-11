@@ -6,9 +6,9 @@
 
 ## 本地定制与上游更新
 
-更新代码前先读 [本地改动清单](docs/LOCAL-CUSTOMIZATIONS.md) 和 [上游更新维护流程](docs/UPSTREAM-MAINTENANCE.md)。本分支包含多机器人与模型切换、引用图片和并发回复修复、只读 Docker 扩展安装及技能适配，不能用上游压缩包直接覆盖。源码基线由 Git 标签 `upstream-linux-base-20261007` 固定；运行数据和秘密不在 Git 中。
+更新代码前先读 [本地改动清单](docs/LOCAL-CUSTOMIZATIONS.md) 和 [上游更新维护流程](docs/UPSTREAM-MAINTENANCE.md)。本分支包含多机器人与模型切换、引用图片和并发回复修复、只读 Docker 扩展安装及技能适配，不能用上游压缩包直接覆盖。源码基线记录在维护清单中；维护者的本地集成仓库另用标签 `upstream-linux-base-20261007` 固定，公开仓库不包含该旧历史。运行数据和秘密不在 Git 中。
 
-维护入口：`npm run audit:local` 检查关键文件及 Git 索引，`npm run test:local` 运行完整本地回归。已有的 `test:docker` 只包含核心 Docker 测试，不包含两个定制技能测试。
+维护入口：从本公开仓库 clone 后使用 `npm run audit:public` 检查关键文件及 Git 索引；维护者的完整本地集成仓库使用 `npm run audit:local`，额外核对基线标签。`npm run test:local` 运行完整本地回归。已有的 `test:docker` 只包含核心 Docker 测试，不包含两个定制技能测试。
 
 ## 预构建 Docker 镜像（推荐）
 

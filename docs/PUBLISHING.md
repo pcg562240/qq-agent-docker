@@ -60,3 +60,14 @@ docker compose ps
 默认只开放本机 `127.0.0.1:3210`。需要局域网访问时按 README 设置 `QQ_AGENT_BIND_ADDRESS` 和精确的 `QQ_AGENT_ALLOWED_HOSTS`，保持密码鉴权，不做公网端口转发。
 
 升级先备份完整数据卷与 `.env`，修改 `.env` 中的 `QQ_AGENT_IMAGE` 到已经审核的版本或 digest，再执行 pull / up；旧镜像和备份分别保留，不执行 `docker compose down -v`。现有本地源码部署无需自动迁移到 GHCR，发布不会重启当前机器人。
+
+## 首版发布验收（2026-10-11）
+
+- 公开源码根提交：`04ea9c3c6ebc3fd30ef644b9bc3d7fc670607072`；`v0.4.7-docker.1` 固定于该提交。后续 main 的文档验收补充不会移动发行标签。
+- [双架构发布流水线](https://github.com/pcg562240/qq-agent-docker/actions/runs/38146889365) 成功：AMD64 / ARM64 均通过离线回归、平台测试和实际镜像隔离启动检查，再合成 manifest。
+- 版本和 `latest` 镜像已上传；版本 manifest 匿名访问成功，包含 `linux/amd64`、`linux/arm64`。
+- 使用空 Docker 登录配置从 GHCR 实际拉取 ARM64 发行镜像成功；再以无网络、无生产挂载、只读文件系统运行 `release-smoke.sh`，启动、UID、私有路径排除和声明保留检查均通过。
+- 多架构版本 digest：`sha256:5ef2b25f58856d97f8bad85491f22680965f211217b7bf47a2f2aa87aa86aeec`。需要固定内容时可将 `.env` 的 `QQ_AGENT_IMAGE` 设为 `ghcr.io/pcg562240/qq-agent-docker@sha256:5ef2b25f58856d97f8bad85491f22680965f211217b7bf47a2f2aa87aa86aeec`。
+- 本机和 Linux 离线回归为 163/163，Linux 平台测试 35/35；公共源码历史 Gitleaks 扫描未检出秘密，当前索引与已知运行密钥精确匹配为 0。
+- 发行镜像检查已验证 connector 1.2.0 内置且保留 `UNLICENSED`。这不改变上文的独立许可边界。
+- 本次发布没有重建、重启或替换维护者现有生产容器，没有推送私有配置、数据卷、聊天记录、生成图片或旧上游归档。
