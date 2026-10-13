@@ -1525,7 +1525,8 @@ export function createRoutes(deps) {
     // ── 版本 / 更新 ──────────────────────────────────────────────────
     {
       method: 'GET', pattern: '/api/version',
-      handler: async ({ res, json }) => json(res, 200, { version: localVersion() })
+      handler: async ({ res, json }) => json(res, 200, { version: localVersion(),
+        dockerVersion: JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).dockerVersion || null })
     },
     {
       method: 'GET', pattern: '/api/update-check',

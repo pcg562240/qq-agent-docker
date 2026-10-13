@@ -13,10 +13,22 @@ if (!['qqbot', 'onebot'].includes(process.env.QQ_AGENT_CHANNEL || 'qqbot')) {
 }
 parseConsoleAllowedHosts(process.env.QQ_AGENT_ALLOWED_HOSTS || '');
 if ((process.env.QQ_AGENT_CHANNEL || 'qqbot') === 'qqbot') {
+  // Recover an interrupted directory swap before profile validation sees it.
+  const fs = await import('node:fs'); const path = await import('node:path');
+  const index = path.join(process.env.QQ_AGENT_DATA_DIR, 'robot-profiles.json');
+  if (fs.existsSync(index)) {
+    const { runBackupJob } = await import('./profile-backup.js');
+    const active = JSON.parse(fs.readFileSync(index, 'utf8')).active;
+    if (active !== 'setup') await runBackupJob(process.env.QQ_AGENT_DATA_DIR, active);
+  }
   const { prepareRobotProfiles } = await import('./robot-profiles.js');
   const profile = prepareRobotProfiles(process.env.QQ_AGENT_DATA_DIR);
   process.env.QQ_AGENT_PROFILES_ROOT = profile.root;
   process.env.QQ_AGENT_ACTIVE_ROBOT = profile.id;
   process.env.QQ_AGENT_DATA_DIR = profile.dir;
+}
+if (process.env.QQ_AGENT_ACTIVE_ROBOT && process.env.QQ_AGENT_ACTIVE_ROBOT !== 'setup') {
+  const { runBackupJob } = await import('./profile-backup.js');
+  await runBackupJob(process.env.QQ_AGENT_PROFILES_ROOT, process.env.QQ_AGENT_ACTIVE_ROBOT);
 }
 await import('./server.js');

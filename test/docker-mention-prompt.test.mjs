@@ -11,9 +11,10 @@ const ctx={kind:'group',chatKey:'group:GROUP',chatId:'GROUP',selfNickname:'BOT',
 test('official atMe survives stripped text in the LLM trigger labels and direct-call guidance',()=>{
   assert.match(buildTriggerBlock([entry],ctx),/（@我）/);
   assert.match(buildUserPrompt(ctx),/本批新消息有人直接 @ 了你/);
-  assert.match(buildUserPrompt(ctx),/复制 # 后的完整 ID，# 只是展示标记，不属于参数/);
+  assert.match(buildUserPrompt(ctx),/复制 # 后的完整编号（可为 m序号-校验码 短编号），# 只是展示标记，不属于参数/);
   assert.match(buildUserPrompt(ctx),/不要用省略号缩短、改写或自己编/);
-  assert.match(buildUserPrompt(ctx),/get_message_images.*不含展示前缀 #/);
+  assert.match(buildUserPrompt(ctx),/get_message_images.*均可原样使用（不含 #）；程序仅在当前聊天精确还原/);
+  assert.match(buildUserPrompt(ctx),/编号失效先用 get_recent_messages 重新获取/);
   assert.match(buildUserPrompt(ctx),/不要自行拼接 <@用户ID>、<@!用户ID>/);
   assert.match(buildUserPrompt(ctx),/官方 QQ 群回复对象由原提问消息绑定/);
 });

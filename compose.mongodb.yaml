@@ -1,0 +1,52 @@
+# Optional: docker compose -f compose.yaml -f compose.mongodb.yaml up -d
+# For GHCR use compose.release.yaml as the first file instead.
+# Never publish 27017; applications get per-profile readWrite users, not root.
+services:
+  qq-agent:
+    networks:
+      - default
+      - growth-db
+    depends_on:
+      mongodb:
+        condition: service_healthy
+  mongodb:
+    image: ${QQ_AGENT_MONGO_IMAGE:-mongo:8.0@sha256:d0d926f94df099bff534b7ee5b5986458131a22489dfff8664509af0c1e2ca9c}
+    user: "999:999"
+    restart: unless-stopped
+    command: [mongod, --auth, --bind_ip_all, --wiredTigerCacheSizeGB, "0.25"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${QQ_AGENT_MONGO_ROOT_USERNAME:-qqagent_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${QQ_AGENT_MONGO_ROOT_PASSWORD:?Set a separate random MongoDB admin password first}
+    volumes:
+      - qq-agent-mongodb-data:/data/db
+    networks:
+      - growth-db
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=128m,mode=1777
+      - /data/configdb:rw,nosuid,size=16m,uid=999,gid=999,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1g
+    pids_limit: 256
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --norc
+        - --eval
+        - 'const a=db.getSiblingDB("admin"); if (!a.auth(process.env.MONGO_INITDB_ROOT_USERNAME,process.env.MONGO_INITDB_ROOT_PASSWORD).ok) quit(1); quit(a.runCommand({ping:1}).ok ? 0 : 1);'
+      interval: 15s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  qq-agent-mongodb-data:
+networks:
+  growth-db:
+    internal: true

@@ -1,0 +1,15 @@
+const $=s=>document.querySelector(s);let profile='',preview=null,working=false;
+async function api(url,{body,raw=false,...options}={}) {
+  const res=await fetch(url,{...options,headers:raw?{}:{'content-type':'application/json'},body:body===undefined?undefined:raw?body:JSON.stringify(body)});
+  if(res.status===401){location.href='/login.html';throw Error('请重新登录。');}
+  if(res.status===409&&res.headers.get('content-type')?.includes('json')){const b=await res.json();if(b.code==='PROFILE_CHANGED'){location.reload();throw Error('页面已过期，正在刷新。');}throw Error(b.error||'当前状态不允许操作。');}
+  const data=await res.json();if(!res.ok)throw Error(data.error||'请求失败。');return data;
+}
+const say=s=>$('#status').textContent=s;
+async function refresh(){const s=await api('/api/backups');profile=s.profileId;$('#profile').textContent='当前机器人 AppID：'+profile;const labels={idle:'尚未创建备份',queued:'等待重启执行',running:'正在处理',restoring:'正在恢复',complete:'已完成',failed:'失败', 'rolling-back':'正在回退'};say((labels[s.status]||s.status)+(s.error?'：'+s.error:''));const box=$('#downloads');box.replaceChildren();for(const [id,label]of [[s.type==='export'&&s.status==='complete'?s.id:null,'下载最新备份'],[s.rollbackId,'下载恢复前的回退备份']])if(id){const a=document.createElement('a');a.href='/api/backups/download/'+id;a.textContent=label;a.className='btn';a.style.marginRight='12px';box.append(a);}return s;}
+async function guarded(fn){if(working)return;working=true;try{await fn();}catch(e){say(e.message);}finally{working=false;}}
+async function restartNotice(){say('任务已提交，机器人将短暂重启。服务恢复后本页会自动刷新。');await new Promise(r=>setTimeout(r,6000));for(let i=0;i<120;i++){try{const r=await fetch('/healthz');if(r.ok){location.reload();return;}}catch{}await new Promise(r=>setTimeout(r,2000));}say('任务尚未完成。请稍后点击刷新状态，不要重复导入。');}
+$('#export').onclick=()=>guarded(async()=>{if(!profile)await refresh();if(!confirm('将短暂重启当前机器人生成私密备份；不打断正在进行的回复。继续？'))return;await api('/api/backups/export',{method:'POST',body:{confirmAppId:profile}});await restartNotice();});
+$('#preview').onclick=()=>guarded(async()=>{preview=null;$('#restore').disabled=true;const file=$('#file').files[0];if(!file)throw Error('请选择 .qqab.gz 备份文件。');if(file.size>512*1024*1024)throw Error('文件超过 512 MiB。');say('正在上传和校验，尚未修改机器人数据…');preview=await api('/api/backups/upload',{method:'POST',body:file,raw:true});$('#preview-result').textContent=`AppID：${preview.profileId}\n备份时间：${preview.createdAt}\n文件：${preview.files} 个\n文件原始大小：${(preview.bytes/1048576).toFixed(1)} MiB\n数据库文档：${preview.documents} 条\n数据库：${preview.databases.join('、')||'无'}\n共享模型配置：不包含，不覆盖`;$('#restore').disabled=false;say('校验通过。请核对范围后再确认恢复。');});
+$('#restore').onclick=()=>guarded(async()=>{if(!preview)return;const typed=prompt('恢复将覆盖当前机器人数据（会先自动备份），并可能加载备份内的技能代码。仅使用可信备份。请输入当前 AppID 确认：'+profile);if(typed!==profile){say('已取消：AppID 未匹配。');return;}await api('/api/backups/restore',{method:'POST',body:{confirmAppId:profile,previewId:preview.previewId,confirmTrust:true}});await restartNotice();});
+$('#refresh').onclick=()=>guarded(refresh);guarded(refresh);

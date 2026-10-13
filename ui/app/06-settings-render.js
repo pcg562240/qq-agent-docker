@@ -882,6 +882,7 @@ function renderChatSection(c) {
   // （屏蔽名单 2026-09-21 已上移到 renderAllowSection，跟白名单作伴）
 return `
     <h3>运行节奏</h3>
+    <div class="field"><a class="btn" href="/backup.html">💾 当前机器人备份／恢复</a></div>
     <div class="field" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <button class="btn" id="open-send-config-btn">📨 信息发送配置</button>
       <button class="btn" id="open-active-config-btn">⚡ 活跃设置</button>

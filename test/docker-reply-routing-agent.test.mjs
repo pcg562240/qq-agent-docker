@@ -20,17 +20,27 @@ for (const mode of ['markdown', 'legacy']) test(`real agent (${mode}) replies to
       const body = JSON.parse(raw);
       const prompt = body.messages.find(m => m.role === 'user' && typeof m.content === 'string' && m.content.includes('【未读信息】以下'))?.content || '';
       const trigger = prompt.split('【未读信息】以下').at(-1).split('【直接召唤】')[0].split('【新加入成员】')[0].split('【当前时间】')[0];
-      const who = trigger.includes(scenario.a) ? 'A' : trigger.includes(scenario.b) ? 'B' : null;
+      const who = scenario.shortRefs
+        ? trigger.includes('question A') ? 'A' : trigger.includes('question B') ? 'B' : null
+        : trigger.includes(scenario.a) ? 'A' : trigger.includes(scenario.b) ? 'B' : null;
       assert.ok(who, 'model should receive the triggering opaque message id');
       const mid = who === 'A' ? scenario.a : scenario.b;
+      const ref = scenario.shortRefs ? trigger.match(/#(m[1-9]\d*-[a-f0-9]{10})/)?.[1] : mid;
+      assert.ok(ref);
+      if (scenario.shortRefs) assert.ok(!trigger.includes(mid));
       const tools = body.messages.filter(m => m.role === 'tool');
+      if (who === 'B' && !tools.length) {
+        const priorReply = prompt.split('\n').find(line => line.endsWith(`${scenario.a}:one`));
+        assert.ok(priorReply?.includes('ID:USER_A'), 'the next real LLM request must retain who the prior answer addressed');
+        assert.ok(priorReply.includes('原提问 #'), 'the original question remains linked in model history');
+      }
       if (who === 'A' && !tools.length && !blocked) {
         blocked = true; scenario.entered.resolve(); await scenario.release.promise;
       }
       const prefix = scenario.rawAt ? `<@!USER_${who}> ` : '';
       const args = { messages: [`${prefix}${mid}:one`, `${prefix}${mid}:two`],
         ...(scenario.at ? { atUserId: `USER_${who}` } : {}),
-        ...(scenario.quote ? { replyToMessageId: scenario.quote === 'display-hash' ? `#${mid}` : mid } : {}) };
+        ...(scenario.quote ? { replyToMessageId: scenario.quote === 'display-hash' ? `#${ref}` : ref } : {}) };
       const name = tools.some(m => m.name === 'send_message') ? 'finish' : 'send_message';
       const message = { role: 'assistant', content: null, tool_calls: [{ id: `CALL_${who}_${name}`, type: 'function',
         function: { name, arguments: JSON.stringify(name === 'finish' ? { summary: 'done' } : args) } }] };
@@ -58,10 +68,11 @@ for (const mode of ['markdown', 'legacy']) test(`real agent (${mode}) replies to
     const [r] = await pending; assert.equal(r.id, id); assert.ok(r.ok, r.error); return r;
   }
   const variants = [{ quote: true }, { quote: false }, { quote: 'display-hash' },
-    { quote: false, at: true }, { quote: true, at: true, rawAt: true }];
+    { quote: false, at: true }, { quote: true, at: true, rawAt: true }, { quote: true, shortRefs: true }];
   for (const [i, variant] of variants.entries()) {
     const { quote } = variant;
     scenario = { a: `ROBOT1.0_.A!${i}`, b: `ROBOT1.0_.B!${i}`, ...variant, entered: deferred(), release: deferred() }; blocked = false;
+    if (scenario.shortRefs) { scenario.a += '.Synthetic-long-id'.repeat(8); scenario.b += '.Synthetic-long-id'.repeat(8); }
     await rpc('receive', { group: true, senderId: 'USER_A', messageId: scenario.a, content: '<@!bot> question A' });
     await scenario.entered.promise;
     // Guaranteed overlap: A's model HTTP response is still withheld here.
@@ -102,6 +113,10 @@ for (const mode of ['markdown', 'legacy']) test(`real agent (${mode}) replies to
     }
     assert.equal(sent[0].messageReference?.message_id, quote ? scenario.a : undefined);
     assert.equal(sent[1].messageReference, undefined);
+    const archive = JSON.parse(fs.readFileSync(path.join(dir, 'messages/group_GROUP_with-hyphen.json')));
+    const saved = archive.messages.filter(m => m.self && [scenario.a, scenario.b].some(mid => m.text.startsWith(mid + ':')));
+    assert.deepEqual(saved.map(m => m.responseTo.userId), ['USER_A', 'USER_A', 'USER_B', 'USER_B']);
+    assert.deepEqual(saved.map(m => m.responseTo.messageId), [scenario.a, scenario.a, scenario.b, scenario.b]);
   }
   assert.equal(observed.filter(r => r.name === 'send_message').length, variants.length * 2);
   child.kill('SIGTERM'); const [code] = await once(child, 'exit'); assert.equal(code, 0); child = null;

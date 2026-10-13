@@ -1,3 +1,5 @@
+import { messageReference, normalizeToolMessageReferences } from './message-reference.js';
+import { responseToForModel } from './reply-history.js';
 // 原生工具集（OpenAI function calling 格式）。
 // 与原版 MCP 工具的关键区别：每个工具自动绑定本次运行对应的会话（chatKey），
 // 不再需要 key/token 参数 —— 模型物理上无法把消息发到别的群/私聊，安全性反而更强。
@@ -106,7 +108,8 @@ function err(message) {
 // 找不到消息 id 时，把当前会话真实可见的 id 告诉模型，避免它继续瞎猜。
 function midHint(ctx) {
   const mids = ctx.store.recent(ctx.chatKey, { limit: 60 })
-    .map((m) => m.mid)
+    .filter(m => !m.recalled)
+    .map((m) => messageReference(m, ctx.chatKey))
     .filter((v) => v !== null && v !== undefined && String(v) !== '');
   const uniq = [...new Set(mids.map(String))].slice(-8);
   return uniq.length
@@ -169,7 +172,7 @@ function registerAllTools() {
       type: 'object',
       properties: {
         messages: { description: legacyMentions ? '要发送的内容：字符串=一条；数组=分多条' : '要发送的内容：字符串=一条；数组=分多条。正文不要自行拼接 <@用户ID>、<@!用户ID> 或 CQ @ 码；引用/指定回复对象使用工具参数', oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
-        replyToMessageId: { type: ['integer', 'string'], description: '要引用/回复的完整消息 id：复制聊天记录中 # 后的 ID，不包含展示前缀 #，不要省略、改写或用省略号缩短；官方通道是长字符串' },
+        replyToMessageId: { type: ['integer', 'string'], description: '要引用/回复的消息编号：复制聊天记录中 # 后的完整编号（支持短编号或完整 QQ ID），不包含展示前缀 #，不要省略、改写或用省略号缩短' },
         atUserId: { type: ['integer', 'string'], description: legacyMentions ? '要 @ 的群成员 QQ 号或官方 OpenID（原样填写，必须对应提问者，可选）' : '可选：群成员 QQ 号或官方 OpenID（原样填写，必须对应提问者）。官方 QQ 群用于选择/校验固定回复对象，是否显示原生 @ 取决于通道模式和权限；不要自行写标签。OneBot 使用原生 @ 段' }
       },
       required: ['messages']
@@ -399,7 +402,7 @@ function registerAllTools() {
     parameters: {
       type: 'object',
       properties: {
-        messageId: { type: ['integer', 'string'], description: '那条消息的 QQ 消息 id（聊天记录里的 #数字）' },
+        messageId: { type: ['integer', 'string'], description: '那条消息的 #消息编号（支持短编号或完整 QQ 消息 ID）' },
         note: { type: 'string', description: '一句简短备注（帮未来的你识别）' }
       },
       required: ['messageId']
@@ -458,7 +461,7 @@ function registerAllTools() {
   registerTool({
     id: 'get_recent_messages',
     name: '查看历史消息',
-    description: '往前翻当前会话的更多历史消息（提示词里只带了最近一段；需要更早的上下文时用）。返回带 messageId（就是聊天记录里的 #数字），可用于引用或看图。消息文本出现 [合并转发聊天记录] 时，用 read_forward 展开看内容。',
+    description: '往前翻当前会话的更多历史消息（提示词里只带了最近一段；需要更早的上下文时用）。返回带 messageId（就是聊天记录里的 #消息编号），可用于引用或看图。消息文本出现 [合并转发聊天记录] 时，用 read_forward 展开看内容。',
     category: 'query',
     icon: '📜',
     parameters: {
@@ -475,12 +478,13 @@ function registerAllTools() {
       return ok({
         count: messages.length,
         messages: messages.map((m) => ({
-          messageId: m.mid ?? undefined,
+          messageId: messageReference(m, ctx.chatKey) || undefined,
           time: new Date(m.ts).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
           // sender 带 QQ 号（与提示词历史同口径）：模型按 id 对齐人，@/拍一拍/记印象才不会指错
           sender: m.self ? '我' : `${m.senderName}${m.senderId ? `(QQ:${m.senderId})` : ''}`,
           senderId: m.self ? undefined : (m.senderId || undefined),
-          text: m.text
+          text: m.text,
+          responseTo: responseToForModel(m, ctx.store, ctx.chatKey) || undefined
         }))
       });
     }
@@ -495,7 +499,7 @@ function registerAllTools() {
     parameters: {
       type: 'object',
       properties: {
-        messageId: { type: ['integer', 'string'], description: '转发消息自己的 QQ 消息 id（聊天记录里的 #数字，可能为负数）' }
+        messageId: { type: ['integer', 'string'], description: '转发消息自己的 #消息编号（支持短编号或完整 QQ 消息 ID，可能为负数）' }
       },
       required: ['messageId']
     },
@@ -505,7 +509,7 @@ function registerAllTools() {
         if (!entry) return err(`当前会话找不到消息 ${args.messageId}。${midHint(ctx)}`);
         // 存档里已是展开文本（收消息时已展开/之前展开过）→ 直接给，不再请求 QQ
         if (String(entry.text || '').startsWith('[合并转发 共')) {
-          return ok({ messageId: entry.mid, text: entry.text, note: '该转发已展开（读的是存档）' });
+          return ok({ messageId: messageReference(entry, ctx.chatKey), text: entry.text, note: '该转发已展开（读的是存档）' });
         }
         const r = await ctx.onebot.call('get_forward_msg', { message_id: Number(entry.mid) });
         const nodes = Array.isArray(r?.messages) ? r.messages : [];
@@ -513,7 +517,7 @@ function registerAllTools() {
         if (!ex || !ex.text) return err('转发内容为空或已被 QQ 服务端丢弃（发送时间太久）');
         // 写回存档：一次展开，永久升级这条记录（模型/存档页/金句墙都受益）
         ctx.store.updateByMid(ctx.chatKey, entry.mid, { text: ex.text, appendMedia: ex.media || [] });
-        return ok({ messageId: entry.mid, text: ex.text, images: (ex.media || []).length });
+        return ok({ messageId: messageReference(entry, ctx.chatKey), text: ex.text, images: (ex.media || []).length });
       } catch (error) {
         return err(`展开失败：${error?.message ?? error}`);
       }
@@ -573,24 +577,25 @@ function registerAllTools() {
   registerTool({
     id: 'get_message_detail',
     name: '查看消息详情',
-    description: '按 QQ 消息 id 查看完整文本、发送者、时间和引用摘要。id 原样使用聊天记录里的 #消息id（可能是长字符串），不要转换成数字或自己编造。',
+    description: '按聊天记录里的 #消息编号查看完整文本、发送者、时间和引用摘要。优先原样使用 m序号-校验码 短编号，也支持完整 QQ 消息 ID，不要编造。',
     category: 'query',
     icon: '📄',
     parameters: {
       type: 'object',
-      properties: { messageId: { type: ['integer', 'string'], description: 'QQ 消息 id：聊天记录里的 # 标识，可能是长字符串或负数，原样传入' } },
+      properties: { messageId: { type: ['integer', 'string'], description: '聊天记录里的 #消息编号：优先使用 m序号-校验码 短编号，也支持完整 QQ ID 或负数，原样传入' } },
       required: ['messageId']
     },
     async execute(ctx, args) {
       const entry = ctx.store.findByMid(ctx.chatKey, args.messageId);
       if (!entry) return err(`当前会话找不到消息 ${args.messageId}。${midHint(ctx)}`);
       return ok({
-        messageId: entry.mid,
+        messageId: messageReference(entry, ctx.chatKey),
         time: new Date(entry.ts).toLocaleString('zh-CN', { hour12: false }),
         sender: entry.self ? '我' : entry.senderName,
         senderId: entry.senderId,
         text: entry.text,
         reply: quoteForDetail(entry.reply),
+        responseTo: responseToForModel(entry, ctx.store, ctx.chatKey) || undefined,
         imageCount: messageImageReferences(entry, mid => ctx.store.findByMid(ctx.chatKey, mid)).length
       });
     }
@@ -599,13 +604,13 @@ function registerAllTools() {
   registerTool({
     id: 'get_message_images',
     name: '查看消息图片',
-    description: '查看某条消息自身及其引用消息里的图片/表情。用户引用图片提问时传提问消息的 id 即可。id 原样使用 #消息id（可以是长字符串），不要转换成数字。',
+    description: '查看某条消息自身及其引用消息里的图片/表情。用户引用图片提问时传提问消息的 #编号即可，优先原样使用 m序号-校验码 短编号；也支持完整 QQ 消息 ID。不要拼接或截断。',
     category: 'query',
     icon: '🖼️',
     requiresVision: true,
     parameters: {
       type: 'object',
-      properties: { messageId: { type: ['integer', 'string'], description: 'QQ 消息 id：聊天记录里的 # 标识，可能是长字符串或负数，原样传入' } },
+      properties: { messageId: { type: ['integer', 'string'], description: '聊天记录里的 #消息编号：优先使用 m序号-校验码 短编号，也支持完整 QQ ID 或负数，原样传入' } },
       required: ['messageId']
     },
     async execute(ctx, args) {
@@ -615,8 +620,8 @@ function registerAllTools() {
         const images = messageImageReferences(entry, mid => ctx.store.findByMid(ctx.chatKey, mid));
         const urls = images.map(m => m.url);
         if (!urls.length) return ok(entry.reply
-          ? `消息 ${args.messageId} 引用了另一条消息，但当前未取得引用图片。不要猜图片内容；如果用户正在向你提问，请用 send_message 请他重发原图或截图。`
-          : `消息 ${args.messageId} 没有可查看的图片。如果用户正在向你提问且缺少内容，请用 send_message 请他补发图片或链接，不要只写在思考中。`);
+          ? `消息 ${messageReference(entry, ctx.chatKey)} 引用了另一条消息，但当前未取得引用图片。不要猜图片内容；如果用户正在向你提问，请用 send_message 请他重发原图或截图。`
+          : `消息 ${messageReference(entry, ctx.chatKey)} 没有可查看的图片。如果用户正在向你提问且缺少内容，请用 send_message 请他补发图片或链接，不要只写在思考中。`);
         const results = [];
         const failed = [];
         for (const url of urls) {
@@ -631,7 +636,7 @@ function registerAllTools() {
           imageCount ? `${imageCount} 张图片` : '',
           videoCount ? `${videoCount} 段视频（由 GIF 动图转换，≤480px/≤24帧）` : ''
         ].filter(Boolean).join(' + ');
-        const built = getImagePartsOrVideo(`消息 ${args.messageId} 的内容${note}：${what}。${images.some(m => m.source === 'reply') ? '包含用户引用的图片。' : ''}`, results);
+        const built = getImagePartsOrVideo(`消息 ${messageReference(entry, ctx.chatKey)} 的内容${note}：${what}。${images.some(m => m.source === 'reply') ? '包含用户引用的图片。' : ''}`, results);
         return built;
       } catch (error) {
         return err(error?.message ?? error);
@@ -1123,7 +1128,7 @@ function registerAllTools() {
     parameters: {
       type: 'object',
       properties: {
-        messageId: { type: ['integer', 'string'], description: '那条带视频的消息的 QQ 消息 id（聊天记录里的 #数字）' },
+        messageId: { type: ['integer', 'string'], description: '那条带视频的消息的 #消息编号（支持短编号或完整 QQ 消息 ID）' },
         frames: { type: ['integer', 'string'], description: '可选：本次要抽几帧（1~12）。不传用设置页的默认值。' }
       },
       required: ['messageId']
@@ -1143,7 +1148,7 @@ function registerAllTools() {
         //    结果整张图被当成**文本**送进上下文 —— 模型既看不到图，
         //    又要为几十万 token 的 base64 付钱。画面一律走下面的 parts。
         const metaOut = {
-          messageId: entry.mid,
+          messageId: messageReference(entry, ctx.chatKey),
           durationSec: info.durationSec,
           width: info.width,
           height: info.height,
@@ -1238,7 +1243,7 @@ export async function executeTool(defs, ctx, name, argsJson) {
     return { content: `错误：工具 ${name} 的参数不是合法 JSON：${String(raw).slice(0, 200)}`, isError: true };
   }
   try {
-    return await def.execute(ctx, args ?? {});
+    return await def.execute(ctx, normalizeToolMessageReferences(args ?? {}, ctx));
   } catch (error) {
     return { content: `错误：${error?.message ?? error}`, isError: true };
   }

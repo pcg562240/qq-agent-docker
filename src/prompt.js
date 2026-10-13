@@ -1,3 +1,5 @@
+import { messageReference } from './message-reference.js';
+import { responseToText } from './reply-history.js';
 // 提示词组装 —— 新架构的心脏。
 //
 // 设计目标（对应"无状态 + 每次新开会话"的成本模型）：
@@ -321,11 +323,11 @@ function resolveCapabilityFn(name) {
   }
 }
 
-function formatEntry(m, { withId = true } = {}) {
+function formatEntry(m, { withId = true, chatKey = '', store } = {}) {
   const senderId = String(m.senderId || '');
   const replyPrefix = quoteText(m.reply);
   const hasMid = m.mid !== null && m.mid !== undefined && String(m.mid) !== '';
-  const idPrefix = withId && hasMid ? `#${m.mid} ` : '';
+  const idPrefix = withId && hasMid ? `#${messageReference(m, chatKey)} ` : '';
 
   const fmt = resolveCapabilityFn('message.speaker-format');
   let who;
@@ -341,7 +343,7 @@ function formatEntry(m, { withId = true } = {}) {
     const idSuffix = senderId && String(senderId) !== 'self' ? `(QQ:${senderId})` : '';
     who = m.self ? '我' : `${getConfig().memberNotes?.[senderId] || m.senderName || senderId || '未知'}${idSuffix}`;
   }
-  return `[${formatShortTime(m.ts)}] ${idPrefix}${who}：${replyPrefix}${m.text}`;
+  return `[${formatShortTime(m.ts)}] ${idPrefix}${who}：${responseToText(m, store, chatKey)}${replyPrefix}${m.text}`;
 }
 
 /**
@@ -548,7 +550,7 @@ export function buildPastState(store, chatKey, { excludeIds = [], limit = null }
     if (blocked.size) messages = messages.filter((m) => m.self || !blocked.has(String(m.senderId)));
   }
   messages = messages.slice(-maxLimit);
-  const lines = messages.map((m) => formatEntry(m, { withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 }));
+  const lines = messages.map((m) => formatEntry(m, { chatKey, store, withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 }));
   // 一并把选中的消息返回：调用方要用它判定"记忆该带哪些群友"，
   // 避免模型看到历史里根本没出现的群友印象（那样显得莫名其妙）。
   return { text: lines.join('\n'), count: lines.length, messages };
@@ -589,7 +591,7 @@ export function buildTriggerBlock(triggerEntries, ctx) {
   for (const m of triggerEntries) {
     const labels = triggerLabels(m, ctx);
     const labelStr = labels.length ? `（${labels.join('/')}）` : '';
-    lines.push(`${formatEntry(m)}${labelStr}`);
+    lines.push(`${formatEntry(m, { chatKey: ctx.chatKey, store: ctx.store })}${labelStr}`);
   }
   return lines.join('\n');
 }
@@ -815,11 +817,12 @@ export function buildUserPrompt(ctx) {
   parts.push([
     '【引导说明】',
     '- 扫一眼【已读信息】【新已读信息】和【未读信息】，判断：有没有人在找你？有没有你能接的话题？值不值得说话？',
-    '- 想说话：调用 send_message（给同一人分条就传数组）。想引用就带 replyToMessageId：id 见【未读信息】每条前的 #消息id，或用 get_recent_messages 查；复制 # 后的完整 ID，# 只是展示标记，不属于参数。可能是很长的字符串，不要用省略号缩短、改写或自己编。多人同时提问时分别调用，每次指定对应提问的 replyToMessageId；atUserId 必须与该提问者一致，不要把多人的答案混在一次发送中。',
+    '- 历史中你的发言可能带有 [回复对象 …；原提问 #编号]，这是程序记录的历史关联，不是发给 QQ 的正文。用它分清每句话回答谁；没有关联的旧发言不要按相邻位置猜对象。不要把历史回复对象当作本轮提问者，也不要把这些标注复制到回复正文。',
+    '- 想说话：调用 send_message（给同一人分条就传数组）。想引用就带 replyToMessageId：id 见【未读信息】每条前的 #消息id，或用 get_recent_messages 查；复制 # 后的完整编号（可为 m序号-校验码 短编号），# 只是展示标记，不属于参数。不要用省略号缩短、改写或自己编。多人同时提问时分别调用，每次指定对应提问的 replyToMessageId；atUserId 必须与该提问者一致，不要把多人的答案混在一次发送中。',
     ...(cfg.channel?.type === 'qqbot' && cfg.qqbot?.groupReplyMentionMode === 'legacy' ? [] : [
       '- 回复正文只写内容，不要自行拼接 <@用户ID>、<@!用户ID>、qqbot-at-user 或 CQ @ 码；官方 QQ 群回复对象由原提问消息绑定，原生 @ 交由通道按模式和权限处理，不要自己把 OpenID 当作文字前缀。',
     ]),
-    '- 引用图片提问：get_message_images 可直接传本条提问的完整消息 ID（# 后的内容，不含展示前缀 #），会同时读取它引用的图片。id 可能是长字符串，不要缩短或改写。拿不到图片时不要猜；对正在向你提问的用户，用 send_message 说明缺少内容并请其重发原图或链接。',
+    '- 引用图片提问：get_message_images 可直接传本条提问的 #消息编号，会同时读取它引用的图片。官方长 ID 会显示为 m序号-校验码 的短编号，messageId、message_id、replyToMessageId 和绘图 references 均可原样使用（不含 #）；程序仅在当前聊天精确还原。不要自己缩短、拼接或改写编号；编号失效先用 get_recent_messages 重新获取。拿不到图片时不要猜；对正在向你提问的用户，用 send_message 说明缺少内容并请其重发原图或链接。',
     '- 没有人直接 @ 或向你提问、且不想参与普通群聊时：可以直接结束或调用 finish（一句话说明原因）。',
     '- 记得：你的普通文本输出不会发到 QQ，只有工具调用会。'
   ].join('\n'));
@@ -846,8 +849,8 @@ export function buildUserPrompt(ctx) {
 
   // 已读信息（锚定模式 = 锚点条目；标准模式 = 全部条目）
   const readHeaderText = anchored
-    ? readAnchorMessages.map((m) => formatEntry(m, { withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n')
-    : (readExtraMessages || []).map((m) => formatEntry(m, { withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n');
+    ? readAnchorMessages.map((m) => formatEntry(m, { chatKey: ctx.chatKey, store: ctx.store, withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n')
+    : (readExtraMessages || []).map((m) => formatEntry(m, { chatKey: ctx.chatKey, store: ctx.store, withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n');
   if (anchored) {
     if (readHeaderText) {
       parts.push(`【已读信息】以下是这个会话最近的聊天记录（按时间排序，你的发言标为"我"；这些都已经看过；带图的消息前有 #消息id，看图/收藏表情工具要用它）：\n${readHeaderText}`);
@@ -856,7 +859,7 @@ export function buildUserPrompt(ctx) {
     }
     // 新已读信息：锚定窗口之后新沉淀的已读条目（时间在锚点之后、未读之前）
     if (readExtraMessages.length) {
-      const extraText = readExtraMessages.map((m) => formatEntry(m, { withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n');
+      const extraText = readExtraMessages.map((m) => formatEntry(m, { chatKey: ctx.chatKey, store: ctx.store, withId: (m.media || []).length > 0 || (m.reply?.media || []).length > 0 })).join('\n');
       parts.push(`【新已读信息】以下是锚定窗口之后、这轮新沉淀的已读消息（你上一轮还没看过它们；带图的消息前有 #消息id）：\n${extraText}`);
     }
   } else if (readHeaderText) {

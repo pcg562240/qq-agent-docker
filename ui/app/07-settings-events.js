@@ -1145,7 +1145,7 @@ function bindSettingsEvents(c) {
   // ── 检查更新（桌面端区块） ──
   const curVerEl = $('#update-current');
   if (curVerEl) {
-    api('/api/version').then((d) => { curVerEl.textContent = `v${d.version || '?'}`; })
+    api('/api/version').then((d) => { curVerEl.textContent = `v${d.version || '?'}${d.dockerVersion ? ` · Docker ${d.dockerVersion}` : ''}`; })
       .catch(() => { curVerEl.textContent = ''; });
   }
   const checkUpdateBtn = $('#check-update-btn');

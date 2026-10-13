@@ -6,6 +6,7 @@ import { dockerEnvironment } from './docker-env.js';
 import { readJson, writeJson, sharedModels, privateConfig, MODEL_KEYS, profileError } from './robot-profiles.js';
 import { PERSONAS } from './personas.js';
 import { sliderToTier } from './tier-slider.js';   // 零依赖模块，避免循环依赖
+import { migrateQQGroupReception } from './qq-group-reception.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..');
@@ -189,7 +190,7 @@ export const DEFAULT_CONFIG = {
   },
   channel: { type: 'onebot' },
   // legacy: historical SDK helpers, with leaked plain-text mention tags removed.
-  qqbot: { enabled: true, appId: '', clientSecret: '', requireMention: true, markdown: false, groupReplyMentionMode: 'off' },
+  qqbot: { enabled: true, appId: '', clientSecret: '', markdown: false, groupReplyMentionMode: 'off' },
   // SnowLuma / OneBot v11
   snowluma: {
     dir: '',                   // SnowLuma 程序目录；留空 = 自动探测项目内 ./snowluma
@@ -486,12 +487,16 @@ export function deepMerge(base, override) {
 }
 
 export function loadConfig() {
-  if (process.env.QQ_AGENT_PROFILES_ROOT) return deepMerge(DEFAULT_CONFIG, migrateLegacySkills(readJson(CONFIG_FILE)));
+  const loaded = parsed => {
+    const config = deepMerge(DEFAULT_CONFIG, migrateLegacySkills(parsed));
+    return migrateQQGroupReception(config, { official: dockerEnvironment(config).channel?.type === 'qqbot' });
+  };
+  if (process.env.QQ_AGENT_PROFILES_ROOT) return loaded(readJson(CONFIG_FILE));
   try {
     let text = fs.readFileSync(CONFIG_FILE, 'utf8');
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const parsed = JSON.parse(text);
-    return deepMerge(DEFAULT_CONFIG, migrateLegacySkills(parsed));
+    return loaded(parsed);
   } catch (error) {
     // ⚠️ 配置文件坏了（手改错/磁盘故障）不能静默回落默认值：
     //   曾经直接返回 DEFAULT，随后任何 updateConfig（比如 5 分钟一次的
@@ -631,6 +636,10 @@ function preserveSanitizedSecrets(current, patch) {
 /** 更新并持久化配置（浅合并到当前值；patch 里传对象字段则整体替换该字段）。 */
 export function updateConfig(patch) {
   const cleanPatch = stripDerivedFlags(structuredClone(patch ?? {}));
+  // Retired UI/API input must not reintroduce an ingress filter or re-run the
+  // migration over newly selected response tiers. Old on-disk values migrate
+  // once at load; a normal save then persists the visible slider policy.
+  if (cleanPatch.qqbot && typeof cleanPatch.qqbot === 'object') delete cleanPatch.qqbot.requireMention;
   // ── 脱敏回传的密钥保留（2026-09-19 修"搜索 Key 离开页签就消失"）──
   // 前端拿到的配置是脱敏的（apiKey 被删、hasApiKey 被加）；它把整个配置/区块
   // 回传保存时，密钥字段天然缺失。对**对象型**密钥容器 deepMerge 会保留基底值
@@ -642,6 +651,7 @@ export function updateConfig(patch) {
   preserveSanitizedSecrets(getConfig(), cleanPatch);
   const previous = getConfig();
   let nextConfig = deepMerge(currentConfig || loadConfig(), cleanPatch);
+  nextConfig = migrateQQGroupReception(nextConfig, { official: dockerEnvironment(nextConfig).channel?.type === 'qqbot' });
   // 磁盘上可能已经存过历史遗留的派生标记，一并清掉
   stripDerivedFlags(nextConfig);
   const activeRobot = process.env.QQ_AGENT_ACTIVE_ROBOT;

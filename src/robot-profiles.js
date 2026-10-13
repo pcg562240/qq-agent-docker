@@ -141,7 +141,8 @@ export class RobotProfiles {
     if (!exists && !archived && fs.existsSync(dir)) throw profileError('该 AppID 已有未登记的数据目录，已保留文件，请检查后再添加。');
     // Only config is created for a new identity: no OpenIDs, memories, reminders,
     // transcripts, tools/persona overrides, or old SDK sessions are copied.
-    const cfg = exists || archived ? validateProfile(this.root, appId) : { qqbot: { appId, requireMention: true }, allow: { private: [], groups: [] }, allowAllWhenEmpty: false };
+    const cfg = exists || archived ? validateProfile(this.root, appId) : { qqbot: { appId },
+      store: { contextTier: 1, contextSliderPos: 5 }, allow: { private: [], groups: [] }, allowAllWhenEmpty: false };
     cfg.qqbot = { ...cfg.qqbot,
       ...(appSecret?.trim() ? { enabled: true, authSource, clientSecret: appSecret.trim() } : {}) };
     if (userOpenid && /^[A-Za-z0-9_-]{1,256}$/.test(userOpenid)) cfg.allow = { ...cfg.allow, private: [...new Set([...(cfg.allow?.private || []), userOpenid])] };
@@ -167,7 +168,7 @@ export class RobotProfiles {
       // setup. The caller closes ingress and restarts after the catalog commit.
       const setup = profileDir(this.root, 'setup');
       if (fs.existsSync(setup)) validateProfile(this.root, 'setup');
-      else writeJson(path.join(setup, 'config.json'), { qqbot: { appId: '', enabled: false, requireMention: true },
+      else writeJson(path.join(setup, 'config.json'), { qqbot: { appId: '', enabled: false }, store: { contextTier: 1, contextSliderPos: 5 },
         allow: { private: [], groups: [] }, allowAllWhenEmpty: false });
       if (!data.accounts.some(a => a.id === 'setup')) data.accounts.push({ id: 'setup', name: '未配置' });
       data.active = 'setup';

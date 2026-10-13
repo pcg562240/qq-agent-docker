@@ -56,11 +56,12 @@ process.on('message', async message => {
     if (message.action === 'send-tool-parameters') {
       process.send({ id: message.id, parameters: app.orchestrator.toolDefs.find(t => t.id === 'send_message').parameters }); return;
     }
+    if (message.action === 'set-config') updateConfig(message.patch);
     if (message.action === 'receive') {
       const group = message.group === true;
       const mode = message.mentionMode || 'event';
-      await app.onebot.receive({ kind: group ? 'group' : 'c2c', rawEventType: group ? (['structured','inline'].includes(mode) ? 'GROUP_MESSAGE_CREATE' : 'GROUP_AT_MESSAGE_CREATE') : 'C2C_MESSAGE_CREATE',
-        ...(group ? { groupOpenid: 'GROUP_with-hyphen' } : {}),
+      await app.onebot.receive({ kind: group ? 'group' : 'c2c', rawEventType: group ? (['structured','inline','ordinary'].includes(mode) ? 'GROUP_MESSAGE_CREATE' : 'GROUP_AT_MESSAGE_CREATE') : 'C2C_MESSAGE_CREATE',
+        ...(group ? { groupOpenid: message.groupId || 'GROUP_with-hyphen' } : {}),
         ...(mode === 'structured' ? { mentions: [{id:'bot',is_you:true,bot:true}] } : {}),
         senderId: message.senderId || 'USER_with-hyphen', messageId: message.messageId || (group ? 'GROUP_MID-with-hyphen' : 'MID_with-hyphen'),
         content: message.content ?? (!group ? 'offline integration message' : mode === 'structured' ? 'ordinary group event with server mention' : mode === 'bare' ? '<@!bot> ' : '<@!bot> offline group message'),

@@ -1,27 +1,28 @@
+import { messageReference } from './message-reference.js';
 // Only known read-only tools may precede a reminder. In particular, a failed
 // send or a skill with side effects must not turn this into an automatic retry.
 const WEB_QUERIES = new Set(['web_search', 'web_fetch', 'chatgpt2api-search__search', 'search-aggregator-skill__web_search_agg']);
 const READ_ONLY_TOOLS = new Set(['get_message_images', 'get_message_detail', ...WEB_QUERIES]);
 const MESSAGE_LOOKUPS = new Set(['get_message_images', 'get_message_detail']);
 
-function directTargets(trigger, kind) {
+function directTargets(trigger, kind, chatKey) {
   return new Set(trigger.filter(e => !e.self && (kind === 'private' || e.atMe === true))
-    .map(e => String(e.mid ?? '')).filter(Boolean));
+    .flatMap(e => [String(e.mid ?? ''), messageReference(e, chatKey)]).filter(Boolean));
 }
 
 function isCurrentLookup(call, targets) {
   if (!MESSAGE_LOOKUPS.has(call.function?.name)) return false;
-  try { return targets.has(String(JSON.parse(call.function.arguments || '{}').messageId)); }
+  try { return targets.has(String(JSON.parse(call.function.arguments || '{}').messageId).replace(/^#/, '')); }
   catch { return false; }
 }
 
 // One initial protocol reminder, not a publisher of model reasoning.
 // Covers a zero-tool ending for a directly addressed message, or an ending
 // after looking up that current message. It never sends the draft itself.
-export function unsentReplyReminder({ trigger = [], messages = [], sent = [], kind,
+export function unsentReplyReminder({ trigger = [], messages = [], sent = [], kind, chatKey = '',
   proactive = false, alreadyReminded = false, canSend = false } = {}) {
   if (proactive || alreadyReminded || !canSend || sent.length) return '';
-  const targets = directTargets(trigger, kind);
+  const targets = directTargets(trigger, kind, chatKey);
   if (!targets.size) return '';
   const turns = messages.filter(m => m.role === 'assistant');
   if (!turns.length || turns.at(-1).tool_calls?.length) return '';
@@ -42,10 +43,10 @@ export function unsentReplyReminder({ trigger = [], messages = [], sent = [], ki
 // A separate, single post-query reminder. It requires a completed relevant
 // query AFTER the previous reminder, not just another silent model ending.
 // The caller enforces the existing model-round budget. Neither helper sends.
-export function unsentQueryReplyReminder({ trigger = [], messages = [], sent = [], kind,
+export function unsentQueryReplyReminder({ trigger = [], messages = [], sent = [], kind, chatKey = '',
   proactive = false, alreadyReminded = false, canSend = false, afterMessageIndex = -1 } = {}) {
   if (proactive || alreadyReminded || !canSend || sent.length) return '';
-  const targets = directTargets(trigger, kind);
+  const targets = directTargets(trigger, kind, chatKey);
   if (!targets.size) return '';
   const turns = messages.filter(m => m.role === 'assistant');
   if (!turns.length || turns.at(-1).tool_calls?.length) return '';

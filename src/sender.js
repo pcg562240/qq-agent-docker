@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { getConfig, DEFAULT_CONFIG } from './config.js';
 import { sleep, randInt, createSendChain, formatClockTime } from './util.js';
 import { mdToPlain, splitForQQ } from './md-to-plain.js';
+import { captureResponseTo } from './reply-history.js';
 
 // 限频回退值统一取自 DEFAULT_CONFIG，杜绝"代码默认 80 / 回退值 8 / UI 回退 8"三处打架。
 const DEFAULT_MAX_PER_MINUTE = DEFAULT_CONFIG.send.maxPerMinute;
@@ -84,6 +85,10 @@ export class SendQueue {
     return options.replyRoute?.msgId
       ? JSON.stringify([chatKey, options.replyRoute.msgId, options.atUserId || '', options.replyToMessageId || ''])
       : chatKey;
+  }
+
+  #responseTo(chatKey, options) {
+    return captureResponseTo(this.store, chatKey, options, typeof this.onebot.captureReplyRoute === 'function');
   }
 
   #checkRate(chatKey) {
@@ -206,6 +211,7 @@ export class SendQueue {
     const list = Array.isArray(messages) ? messages : [messages];
     if (!list.length) throw new Error('消息列表为空');
     options = this.#sendOptions(kind, id, options);
+    const responseTo = this.#responseTo(chatKey, options);
     const hardSplitAt = Number(getConfig().send?.hardSplitAt) || 0;
     const parts = [];
     for (const m of list) {
@@ -246,7 +252,7 @@ export class SendQueue {
         });
         this.#markSent(dedupeScope, text);   // 只有 OneBot 成功返回后才记入去重窗口
         const ts = Date.now();
-        this.store.appendSelf(chatKey, { text, ts, mid: data?.message_id ?? null });
+        this.store.appendSelf(chatKey, { text, ts, mid: data?.message_id ?? null, responseTo });
         this.onSent?.({ chatKey, text, messageId: data?.message_id ?? null });
         return { text, messageId: data?.message_id ?? null, at: formatClockTime(ts),
           ...(options.replyRoute?.msgId ? { replySourceMessageId: options.replyRoute.msgId, replyUserId: options.replyRoute.userId } : {}) };
@@ -276,6 +282,7 @@ export class SendQueue {
   sendSticker(chatKey, sticker, options = {}) {
     const [kind, id] = String(chatKey).split(':');
     options = this.#sendOptions(kind, id, options);
+    const responseTo = this.#responseTo(chatKey, options);
     const chain = this.#chain(chatKey);
     return chain(async () => {
       this.#checkRate(chatKey);
@@ -341,7 +348,7 @@ export class SendQueue {
         }
       }
       const ts = Date.now();
-      this.store.appendSelf(chatKey, { text: `[表情包:${sticker.desc || sticker.localNote || sticker.id}]`, ts, mid: data?.message_id ?? null });
+      this.store.appendSelf(chatKey, { text: `[表情包:${sticker.desc || sticker.localNote || sticker.id}]`, ts, mid: data?.message_id ?? null, responseTo });
       this.onSent?.({ chatKey, text: `[表情包]`, messageId: data?.message_id ?? null, sticker: sticker.id });
       return { message_id: data?.message_id ?? null };
     });
@@ -379,6 +386,7 @@ export class SendQueue {
     if (!url && !dataUrl && !file) return Promise.reject(new Error('图片地址为空'));
 
     options = this.#sendOptions(kind, id, options);
+    const responseTo = this.#responseTo(chatKey, options);
     const dedupeScope = this.#dedupeScope(chatKey, options);
 
     const ref = this.onebot.kind === 'qqbot' && dataUrl ? dataUrl : (file ? toFileUri(file) : (url || dataUrl));
@@ -438,7 +446,7 @@ export class SendQueue {
       this.#markSent(dedupeScope, `__img__${dedupeKey}`);   // 发图同样：成功后才记账
       const ts = Date.now();
       const note = options.note ? `:${String(options.note).slice(0, 40)}` : '';
-      this.store.appendSelf(chatKey, { text: `[图片${note}]`, ts, mid: data?.message_id ?? null });
+      this.store.appendSelf(chatKey, { text: `[图片${note}]`, ts, mid: data?.message_id ?? null, responseTo });
       this.onSent?.({ chatKey, text: `[图片${note}]`, messageId: data?.message_id ?? null, kind: 'image' });
       return { message_id: data?.message_id ?? null };
     });
@@ -464,6 +472,7 @@ export class SendQueue {
     const segs = (Array.isArray(segments) ? segments : []).filter((s) => s && s.type);
     if (!segs.length) return Promise.reject(new Error('媒体段为空'));
     options = this.#sendOptions(kind, id, options);
+    const responseTo = this.#responseTo(chatKey, options);
     const dedupeScope = this.#dedupeScope(chatKey, options);
     const label = String(options.label || '[媒体]');
     // 去重键优先用本地文件路径（同一份文件重复发说明是重试/重复触发）
@@ -496,7 +505,7 @@ export class SendQueue {
       }
       this.#markSent(dedupeScope, `__media__${dedupeKey}`);   // 成功后才记账
       const ts = Date.now();
-      this.store.appendSelf(chatKey, { text: label, ts, mid: data?.message_id ?? null });
+      this.store.appendSelf(chatKey, { text: label, ts, mid: data?.message_id ?? null, responseTo });
       this.onSent?.({ chatKey, text: label, messageId: data?.message_id ?? null, kind: 'media' });
       return { message_id: data?.message_id ?? null };
     });

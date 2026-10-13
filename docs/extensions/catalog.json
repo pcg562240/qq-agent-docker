@@ -96,7 +96,7 @@
     {
       "manifest": "plugins/kb-growth/plugin.json",
       "id": "kb-growth",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "distribution": "bundled",
       "maintenance": "downstream-maintained"
     },
@@ -117,7 +117,7 @@
     {
       "manifest": "plugins/memory-growth/plugin.json",
       "id": "memory-growth",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "distribution": "bundled",
       "maintenance": "downstream-maintained"
     },

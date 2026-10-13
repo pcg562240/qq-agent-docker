@@ -65,11 +65,13 @@ test('non-allowlisted peers are discoverable but body and send permission are de
   assert.ok(!fs.readFileSync(path.join(dir, 'qqbot', 'peers.json'), 'utf8').includes('PRIVATE_BODY'));
   await assert.rejects(client.sendText('private', 'USER_AB-cd', 'no'), /白名单/);
 });
-test('group mention policy can be enabled without granting platform capabilities', async t => {
+test('ordinary group reception ignores the retired mention filter without granting platform capabilities', async t => {
   const { client, events, options } = await fixture(t);
   const msg = incoming({ kind: 'group', groupOpenid: 'GROUP_X-y', rawEventType: 'GROUP_MESSAGE_CREATE' });
-  await client.receive(msg); assert.equal(events.length, 0);
+  await client.receive(msg); assert.equal(events.length, 1);
+  assert.equal(events[0].officialAtMe, false);
   options.requireMention = false; await client.receive(msg); assert.equal(events.length, 1);
+  await client.receive({ ...msg, messageId: 'NEXT' }); assert.equal(events.length, 2);
 });
 test('ingress diagnostics retain separate filtered, forwarded, duplicate, blocked and error results without bodies', async t => {
   let mode = 'forwarded';
@@ -83,7 +85,7 @@ test('ingress diagnostics retain separate filtered, forwarded, duplicate, blocke
   await client.receive(mentioned); await client.receive(mentioned);
   mode = 'blocked_sender'; await client.receive({ ...mentioned, messageId: 'BLOCKED' });
   mode = 'error'; await assert.rejects(client.receive({ ...mentioned, messageId: 'ERROR' }));
-  assert.deepEqual(client.ingress.list('group', 'GROUP_X-y').map(e => e.reason), ['error', 'blocked_sender', 'duplicate', 'forwarded', 'not_mentioned']);
+  assert.deepEqual(client.ingress.list('group', 'GROUP_X-y').map(e => e.reason), ['error', 'blocked_sender', 'duplicate', 'forwarded', 'forwarded']);
   assert.doesNotMatch(JSON.stringify(client.ingress.entries), /PRIVATE_/);
 });
 test('ordinary group event with structured is_you mention enters the channel and preserves @ tier signal', async t => {
@@ -103,12 +105,13 @@ test('inline mentions must match this bot; other bots and @all are not self ment
     {content:'hello',mentions:[{is_you:'true'}]},
     {content:'ordinary message'},
   ].entries()) await client.receive(incoming({...msg,...body,messageId:'NO-'+i}));
-  assert.equal(events.length,0); assert.equal(client.status().peers[0].lastIngress,'not_mentioned');
+  assert.equal(events.length,5); assert.ok(events.every(e => e.officialAtMe === false));
+  assert.equal(client.status().peers[0].lastIngress,'forwarded');
   for(const [i,content] of ['<@!BOT> hello','hello <@123456>','<@OTHER> <@!BOT> hello'].entries()) {
     await client.receive(incoming({...msg,content,messageId:'YES-'+i}));
     assert.equal(events.at(-1).officialAtMe,true);
   }
-  assert.equal(events.length,3); assert.match(events[2].raw_message,/^<@OTHER>/,'do not strip a leading mention of someone else');
+  assert.equal(events.length,8); assert.match(events[7].raw_message,/^<@OTHER>/,'do not strip a leading mention of someone else');
 });
 test('mention-only messages have a neutral trigger; diagnostics contain no body or secret', async t => {
   const { client, events, dir }=await fixture(t);
@@ -116,7 +119,7 @@ test('mention-only messages have a neutral trigger; diagnostics contain no body 
   assert.ok(events[0].message.some(s=>s.type==='text'&&s.data.text.trim()));
   await client.receive(incoming({kind:'group',groupOpenid:'GROUP_X-y',rawEventType:'GROUP_MESSAGE_CREATE',content:'PRIVATE_GROUP_BODY',messageId:'SKIP'}));
   const peer=client.status().peers.find(x=>x.kind==='group');assert.equal(peer.lastAtMe,false);assert.equal(peer.lastEventType,'GROUP_MESSAGE_CREATE');
-  assert.ok(peer.lastSeenAt>0);assert.equal(peer.lastIngress,'not_mentioned');
+  assert.ok(peer.lastSeenAt>0);assert.equal(peer.lastIngress,'forwarded');
   const persisted=fs.readFileSync(path.join(dir,'qqbot','peers.json'),'utf8');assert.ok(!persisted.includes('PRIVATE_GROUP_BODY'));assert.ok(!persisted.includes('SECRET_TEST_ONLY'));
 });
 test('text reply keeps passive anchor and distinguishes quote reference', async t => {

@@ -9,7 +9,7 @@ import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
-test('quoted screenshot and missing quote complete through real ingest/tools/nudge/send pipeline', { timeout: 45000 }, async t => {
+for (const shortReferences of [false, true]) test(`quoted screenshot and missing quote complete through real ingest/tools/nudge/send pipeline (short refs: ${shortReferences})`, { timeout: 45000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qqa-quote-agent-'));
   let child, output = '', current = null;
   const requests = [];
@@ -19,12 +19,17 @@ test('quoted screenshot and missing quote complete through real ingest/tools/nud
     let raw = ''; for await (const chunk of req) raw += chunk;
     const body = JSON.parse(raw); requests.push({ id: current.id, ...body });
     const tools = body.messages.filter(m => m.role === 'tool');
+    const prompt = body.messages.find(m => m.role === 'user' && typeof m.content === 'string' && m.content.includes('【未读信息】以下'))?.content || '';
+    const trigger = prompt.split('【未读信息】以下').at(-1).split('【直接召唤】')[0];
+    const reference = shortReferences ? trigger.match(/#(m[1-9]\d*-[a-f0-9]{10})/)?.[1] : current.id;
+    assert.ok(reference, 'model receives a short reference for the triggering image request');
+    if (shortReferences) assert.ok(!prompt.includes(current.id));
     const reminded = body.messages.some(m => typeof m.content === 'string' && m.content.startsWith('【发送检查，仅提醒一次】'));
     const call = (name, args) => ({ role: 'assistant', content: null, tool_calls: [{ id: `CALL_${tools.length}_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
     const sent = tools.some(m => m.name === 'send_message');
-    const message = !tools.length ? call('get_message_images', { messageId: current.id })
+    const message = !tools.length ? call('get_message_images', { messageId: reference })
       : sent ? call('finish', { summary: '测试已发送' })
-      : reminded && !current.ignoreReminder ? call('send_message', { messages: current.reply })
+      : reminded && !current.ignoreReminder ? call('send_message', { messages: current.reply, ...(shortReferences ? { replyToMessageId: reference } : {}) })
       : { role: 'assistant', content: '没图没链接，啥也没有。直接说看不到。' };
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({ choices: [{ index: 0, finish_reason: message.tool_calls ? 'tool_calls' : 'stop', message }], usage: { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 } }));
@@ -52,6 +57,7 @@ test('quoted screenshot and missing quote complete through real ingest/tools/nud
     { id: 'QUOTE_MISSING', quote: {}, reply: '我这边没有拿到引用图片，请重发原图或截图。' },
     { id: 'QUOTE_IGNORED_REMINDER', quote: {}, ignoreReminder: true }
   ];
+  if (shortReferences) for (const c of cases) c.id = 'ROBOT1.0_' + 'Synthetic.id-with-suffix_'.repeat(6) + c.id;
   for (const [index, scenario] of cases.entries()) {
     current = scenario;
     await rpc('receive', { group: true, messageId: scenario.id, quote: scenario.quote, content: '<@!bot> 肥肥，这个是什么新闻' });
@@ -73,14 +79,17 @@ test('quoted screenshot and missing quote complete through real ingest/tools/nud
     const snapshot = await rpc('snapshot');
     assert.equal(snapshot.sent.length, Math.min(index + 1, 2));
     assert.ok(snapshot.sent.every(s => !s.content.includes('直接说看不到')), 'never publish reasoning as a reply');
-    if (!scenario.ignoreReminder) assert.equal(snapshot.sent.at(-1).content, scenario.reply);
+    if (!scenario.ignoreReminder) {
+      assert.equal(snapshot.sent.at(-1).content, scenario.reply);
+      if (shortReferences) assert.equal(snapshot.sent.at(-1).target.msgId, scenario.id);
+    }
   }
-  const first = requests.filter(r => r.id === 'QUOTE_IMAGE');
+  const first = requests.filter(r => r.id === cases[0].id);
   assert.ok(first.some(r => r.messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))), 'quoted image must reach model as media parts');
   assert.ok(first.some(r => r.messages.some(m => typeof m.content === 'string' && m.content.includes('[引用 [图片]]'))));
-  const last = requests.filter(r => r.id === 'QUOTE_IGNORED_REMINDER');
+  const last = requests.filter(r => r.id === cases[2].id);
   assert.equal(last.length, 3, 'one lookup, one silent turn, one reminder; no infinite retries');
   const persisted = JSON.parse(fs.readFileSync(path.join(dir, 'messages/group_GROUP_with-hyphen.json')));
-  assert.equal(persisted.messages.find(m => m.mid === 'QUOTE_IMAGE').reply.media.length, 1);
+  assert.equal(persisted.messages.find(m => m.mid === cases[0].id).reply.media.length, 1);
   child.kill('SIGTERM'); const [code] = await once(child, 'exit'); assert.equal(code, 0); child = null;
 });

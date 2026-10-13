@@ -147,19 +147,28 @@
         "src/orchestrator.js",
         "src/store.js",
         "ui/connection.js",
-        "src/qqbot-ingress.js"
+        "src/qqbot-ingress.js",
+        "src/qq-group-reception.js",
+        "src/config.js",
+        "src/docker-env.js",
+        "src/robot-profiles.js",
+        "ui/connection.html"
       ],
       "tests": [
         "test/docker-mention-prompt.test.mjs",
         "test/docker-channel.test.mjs",
         "test/docker-sdk.test.mjs",
-        "test/docker-agent.test.mjs"
+        "test/docker-agent.test.mjs",
+        "test/docker-group-reception.test.mjs",
+        "test/docker-group-reception-agent.test.mjs"
       ],
       "mustPreserve": [
         "officialAtMe survives stripped content",
         "no false self mention for other people",
         "ingress diagnostics do not claim a reply was sent",
-        "bounded ingress metadata journal; no bodies, sender IDs or retroactive delivery claims; app-level blocked sender is not marked forwarded"
+        "bounded ingress metadata journal; no bodies, sender IDs or retroactive delivery claims; app-level blocked sender is not marked forwarded",
+        "archive allowed ordinary group messages before tier evaluation; tier 1 no idle ordinary-message LLM calls while next prompt can use history; blocked/unlisted messages still excluded; frozen queued replies unchanged",
+        "legacy explicit requireMention true migrates once to visible tier 1 global/group/peak sliders without load-time disk writes; false preserves tiers and OneBot is unaffected; old form input cannot restore gate or reset chosen tiers; new profiles default tier 1; no historical backfill"
       ]
     },
     {
@@ -239,21 +248,40 @@
         "src/store.js",
         "src/tools.js",
         "src/prompt.js",
-        "src/orchestrator.js"
+        "src/orchestrator.js",
+        "src/message-reference.js",
+        "doc/extend_development/skill-reference.md"
       ],
       "tests": [
         "test/docker-quotes.test.mjs",
         "test/docker-quote-agent.test.mjs",
         "test/docker-reply-completion.test.mjs",
         "test/docker-reply-completion-agent.test.mjs",
-        "test/docker-query-reply-agent.test.mjs"
+        "test/docker-query-reply-agent.test.mjs",
+        "test/docker-message-reference.test.mjs"
       ],
       "mustPreserve": [
         "quoted media persisted separately and scoped to chat",
         "refMsgIdx is not a sendable message ID",
         "initial and post-query reminders independently bounded to one each, at most two within existing round budget; never publish reasoning",
-        "post-query nudge requires completed matching read-only query result after the previous reminder; web search/fetch or current-message lookup only; no nudge for sent/send attempts/finish/passive or unknown side-effecting tools"
-      ]
+        "post-query nudge requires completed matching read-only query result after the previous reminder; web search/fetch or current-message lookup only; no nudge for sent/send attempts/finish/passive or unknown side-effecting tools",
+        "stable chat/record-bound model-facing short references for long message IDs; exact tool-boundary resolution before image/edit/mask/reply routing; protocol/store IDs unchanged; stale/recalled/cross-chat references reject, no fuzzy/latest fallback; preserve legacy drawing #local-number syntax and bounded reply reminders"
+      ],
+      "messageReferenceVerification": {
+        "date": "2026-10-13",
+        "sourceCommit": "e8b485262d36c5c644b435f5b390954b8360285d",
+        "macLocalTests": 384,
+        "linuxLocalTests": 384,
+        "linuxPlatformTests": 35,
+        "upstreamSelectedTests": "passed",
+        "imageId": "sha256:93a7425f23f09f2bdf918fc50c75e81e7dd3e59e73db0a40645a482f9184a0ba",
+        "deployment": "backed-up-and-verified",
+        "protectedFilesUnchanged": 42,
+        "loadedModules": 78,
+        "qqConnected": true,
+        "realQQTestSends": false,
+        "publicPublished": false
+      }
     },
     {
       "id": "L11",
@@ -266,7 +294,11 @@
         "src/prompt.js",
         "src/config.js",
         "src/qqbot-send-diagnostics.js",
-        "src/routes.js"
+        "src/routes.js",
+        "src/message-reference.js",
+        "src/store.js",
+        "src/reply-history.js",
+        "doc/extend_development/skill-reference.md"
       ],
       "tests": [
         "test/docker-reply-routing.test.mjs",
@@ -274,7 +306,9 @@
         "test/docker-mention-prompt.test.mjs",
         "test/docker-sdk.test.mjs",
         "test/docker-profiles-http.test.mjs",
-        "test/docker-send-diagnostics.test.mjs"
+        "test/docker-send-diagnostics.test.mjs",
+        "test/docker-message-reference.test.mjs",
+        "test/docker-reply-history.test.mjs"
       ],
       "mustPreserve": [
         "freeze run context and route at enqueue time",
@@ -286,8 +320,31 @@
         "honor persisted off or legacy mode for desktop compatibility; turning Markdown off preserves pinned routing and explicit quotes; no auto Markdown enablement or claim of native plain-text rendering",
         "distinguish current plain-text tag suppression from protocol capability; historical API success is not client-rendering evidence; do not infer all text mentions require Markdown",
         "bounded per-client in-memory text send diagnostics whitelist SDK serialized metadata only; no bodies, identifiers, URLs, credentials or error text; async isolation, no retry/mutation and no client-rendering claims",
-        "legacy mode keeps historical SDK helpers and mention guidance; after confirmed raw-ID recurrence, suppress manual atUserId prefix and normalize matching model prefixes before split/history; atUserId still selects/validates frozen route; preserve msg_id, explicit quote, conflict/expiry guards and no Markdown injection; do not equate clean text with native mention rendering"
-      ]
+        "legacy mode keeps historical SDK helpers and mention guidance; after confirmed raw-ID recurrence, suppress manual atUserId prefix and normalize matching model prefixes before split/history; atUserId still selects/validates frozen route; preserve msg_id, explicit quote, conflict/expiry guards and no Markdown injection; do not equate clean text with native mention rendering",
+        "stable chat/record-bound model-facing short references for long message IDs; exact tool-boundary resolution before image/edit/mask/reply routing; protocol/store IDs unchanged; stale/recalled/cross-chat references reject, no fuzzy/latest fallback; preserve legacy drawing #local-number syntax and bounded reply reminders",
+        "persist enqueue-time question and recipient attribution in self-message history for every successful bubble/media; model prompt and history/detail queries expose stable scoped references; no wire/body/Markdown changes, no attribution guessed for old or unscoped proactive records; recalled/deleted/trimmed sources do not expose reusable IDs or duplicated text/media; OneBot explicit evidence only"
+      ],
+      "replyHistoryVerification": {
+        "date": "2026-10-13",
+        "macLocalTests": 393,
+        "linuxLocalTests": 393,
+        "linuxPlatformTests": 35,
+        "upstreamSelectedTests": "passed",
+        "imageId": "sha256:7c656c7dd961593f565ad093c2f95197d39618c3d849c24568bdd44d37146a5f",
+        "deployment": "backed-up-and-verified",
+        "historicalBackfill": false,
+        "realQQTestSends": false,
+        "publicPublished": false,
+        "deployedAt": "2026-10-13T18:29:41+08:00",
+        "sourceCommit": "12f5f3201c3efe00f6ebe0bfe4ae29fb3fed3397",
+        "backupVerified": true,
+        "protectedFilesUnchanged": 42,
+        "envUnchanged": true,
+        "extensionsUnchanged": true,
+        "loadedModules": 78,
+        "healthy": true,
+        "qqConnected": true
+      }
     },
     {
       "id": "L12",
@@ -686,6 +743,62 @@
         "public-only DNS-pinned bounded fetch for user URLs",
         "no auto-enabling modules/model extraction; source-only external updates after complete backup",
         "73 bundled plus 5 installed modules; structural/mock tests are not live API/GPU/QQ certification"
+      ]
+    },
+    {
+      "id": "L23",
+      "title": "维护者修订的小鲸鱼默认人设",
+      "files": [
+        "src/personas.js",
+        "src/config.js"
+      ],
+      "tests": [
+        "test/docker-persona-default.test.mjs"
+      ],
+      "mustPreserve": [
+        "only user-authorized reviewed role text becomes default; retain original template separately; never overwrite saved global/per-chat personas or copy private runtime configuration"
+      ]
+    },
+    {
+      "id": "L24",
+      "title": "可选隔离 MongoDB 与连接串保护",
+      "files": [
+        "compose.mongodb.yaml",
+        "docs/MONGODB.md",
+        "src/app.js",
+        "plugins/kb-growth/plugin.json",
+        "plugins/memory-growth/plugin.json"
+      ],
+      "tests": [
+        "test/docker-mongodb.test.mjs"
+      ],
+      "mustPreserve": [
+        "opt-in internal-only authenticated database; non-root; separate persistent volume; root credentials never in app",
+        "per-profile least-privilege readWrite users and separate knowledge/memory databases; no auto-enabling extraction/injection",
+        "mask MongoDB credentials in settings and full config; preserve masked saves; backup both data stores before upgrade"
+      ]
+    },
+    {
+      "id": "L25",
+      "title": "网页当前机器人备份与恢复",
+      "files": [
+        "src/profile-backup.js",
+        "src/profile-backup-routes.js",
+        "src/docker-server.js",
+        "src/app.js",
+        "ui/backup.html",
+        "ui/backup.js",
+        "docs/PROFILE-BACKUP.md"
+      ],
+      "tests": [
+        "test/docker-backup.test.mjs",
+        "test/docker-backup-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "authenticated, same-origin, profile-generation guarded, same AppID explicit trusted-code restore confirmation",
+        "offline bootstrap jobs; complete pre-restore backup; persistent rollback before profile validation; fail closed on incomplete rollback",
+        "current profile only; no shared model/other profile changes; bounded integrity-checked archive without links/traversal; no backup-controlled Mongo endpoints",
+        "BSON documents and indexes; refuse shared databases; no partial-success backup on Mongo failure; never auto-enable models or send real QQ tests"
       ]
     }
   ],

@@ -1156,7 +1156,7 @@ export class Orchestrator {
         });
         if (!rescued.length) {
           const reminderContext = {
-            trigger: triggerEntries, messages, sent: session.sent, kind, proactive,
+            trigger: triggerEntries, messages, sent: session.sent, kind, chatKey, proactive,
             canSend: toolDefs.some(t => t.id === 'send_message')
           };
           let reminder = '', reminderPhase = 'initial';

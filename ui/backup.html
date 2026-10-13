@@ -1,0 +1,8 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>机器人备份与恢复</title><link rel="icon" href="/favicon.ico?v=20261011"><link rel="stylesheet" href="/connection.css"></head>
+<body><main><header><div><div class="eyebrow">QQ AGENT / PRIVATE BACKUP</div><h1>当前机器人备份／恢复</h1></div><a href="/">返回控制台 ↗</a></header>
+<section><h2 id="profile">正在读取当前机器人…</h2><p>范围：当前机器人的配置、人设、聊天、文件记忆、已安装技能及专属 MongoDB 知识／记忆库。<strong>不覆盖其他机器人、共享模型服务、控制台密码或 Docker 环境。</strong></p><p>备份含 QQ 凭据、技能密钥和聊天隐私，下载文件不加密，请妥善保管，不要发到群里或公开仓库。</p><p>导出／恢复会短暂重启机器人并暂停服务，以取得一致数据；正在回复时会拒绝操作，稍后重试。数据库不可达会停止操作，不生成缺库的“完整备份”。上限：压缩 512 MiB、解压 2 GiB、单文件 64 MiB、5 万条记录；更大的实例需离线管理员备份。</p>
+<button type="button" id="export">生成并导出备份</button></section>
+<section><h2>导入与恢复</h2><p>只允许恢复到相同 AppID。先上传校验和预览，再二次确认。恢复前自动生成回退备份；MongoDB 使用当前实例的连接参数，不使用导入文件提供的数据库地址。</p><p><strong>技能含可执行代码，仅导入自己或可信来源的备份。</strong>导入会替换当前机器人的数据，不是合并聊天记录。共享模型在另一实例上需单独配置。</p>
+<input type="file" id="file" accept=".gz,.qqab.gz"><button type="button" id="preview">上传并预览</button><pre id="preview-result"></pre><button type="button" id="restore" disabled>确认恢复当前机器人</button></section>
+<section><h2>最近任务</h2><p id="status" role="status"></p><div id="downloads"></div><button type="button" id="refresh">刷新状态</button></section>
+</main><script type="module" src="/backup.js"></script></body></html>

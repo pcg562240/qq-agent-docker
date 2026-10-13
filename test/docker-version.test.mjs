@@ -21,3 +21,10 @@ test('legacy packaging default follows the app without removing explicit version
   assert.ok(defaultVersion, 'QL_APP_VERSION override must remain available');
   assert.equal(defaultVersion[1], pkg.version);
 });
+
+
+test('Docker release revision is independent and matches deployment examples', () => {
+  const pkg=JSON.parse(read('package.json'));
+  assert.match(pkg.dockerVersion, /^0\.4\.0-docker\.[1-9]\d*$/);
+  for (const file of ['compose.release.yaml','.env.example','README.md']) assert.ok(read(file).includes('qq-agent-docker:'+pkg.dockerVersion));
+});

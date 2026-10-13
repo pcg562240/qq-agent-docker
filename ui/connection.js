@@ -5,7 +5,7 @@ let modelsUI, settingsBusy = false;
 let profiles, profileBusy = false, switching = false, settingsDirty = false;
 let deletingRobot = null;
 let qrId = '', qrTimer, qrBusy = false, qrApplying = false, qrConfirmError = '';
-const ingressStates = { not_allowed: '白名单 / 黑名单拦截', not_mentioned: '未识别到 @ 本机器人',
+const ingressStates = { not_allowed: '白名单 / 黑名单拦截', not_mentioned: '旧版仅 @ 接收过滤（历史记录）',
   processing: '正在交给消息处理器', forwarded: '已通过通道筛选（不等于模型已回复）',
   blocked_sender: '发送者被屏蔽，未存档', empty_message: '消息无可处理内容', duplicate: '重复事件，已去重',
   bot_message: '机器人自身/其他机器人的消息已忽略', error: '消息处理异常，请查看日志' };
@@ -193,7 +193,6 @@ async function init() {
   const c = cfg.config || cfg;
   $('appId').value = c.qqbot?.appId || '';
   $('enabled').checked = c.qqbot?.enabled !== false;
-  $('requireMention').checked = c.qqbot?.requireMention !== false;
   $('secret').placeholder = c.qqbot?.hasClientSecret ? '已配置，留空保留' : '填写 AppSecret';
   $('private').value = (c.allow?.private || []).join('\n');
   $('groups').value = (c.allow?.groups || []).join('\n');
@@ -207,7 +206,7 @@ $('settings').addEventListener('submit', async event => {
     if (allowed.some(id => !/^[A-Za-z0-9_-]{1,256}$/.test(id))) throw new Error('OpenID 只接受字母、数字、下划线和连字符');
     const patch = { allow: { private: ids('private'), groups: ids('groups') }, allowAllWhenEmpty: false };
     if (integration?.type === 'qqbot') {
-      patch.qqbot = { appId: $('appId').value.trim(), enabled: $('enabled').checked, requireMention: $('requireMention').checked };
+      patch.qqbot = { appId: $('appId').value.trim(), enabled: $('enabled').checked };
       if (patch.qqbot.appId && !/^\d+$/.test(patch.qqbot.appId)) throw new Error('AppID 应为数字字符串');
       if ($('secret').value.trim()) patch.qqbot.clientSecret = $('secret').value.trim();
     }

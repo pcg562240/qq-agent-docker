@@ -5,7 +5,7 @@
 <link rel="icon" href="/favicon.ico?v=20261011" type="image/x-icon" sizes="16x16 24x24 32x32 48x48 64x64 128x128 256x256">
 <link rel="icon" type="image/png" href="/favicon.png?v=20261011" sizes="256x256">
 <link rel="apple-touch-icon" href="/favicon.png?v=20261011"><link rel="stylesheet" href="/connection.css"><script src="/connection.js" type="module"></script></head>
-<body><main><header><div><div class="eyebrow">QQ AGENT / DOCKER</div><h1>连接你的机器人</h1><div class="muted">官方 QQ 通道，无需运行 QQ 桌面客户端。</div></div><a href="/">返回完整控制台 ↗</a></header>
+<body><main><header><div><div class="eyebrow">QQ AGENT / DOCKER</div><h1>连接你的机器人</h1><div class="muted">官方 QQ 通道，无需运行 QQ 桌面客户端。</div></div><div><a href="/backup.html">备份／恢复</a> · <a href="/">返回完整控制台 ↗</a></div></header>
 <div id="status" role="status">正在读取连接状态…</div>
 <p id="connection-help" class="muted" role="status" hidden></p>
 <form id="settings"><div class="grid">
@@ -37,7 +37,8 @@
 <label>AppSecret<input id="secret" type="password" autocomplete="new-password" placeholder="留空保留已有密钥"></label>
 </details>
 <label class="check"><input id="enabled" type="checkbox">启用官方 QQ 通道</label>
-<label class="check"><input id="requireMention" type="checkbox" checked>群聊只接收 @ 机器人的消息</label>
+<p class="muted small">名单内平台推送的群消息均会存档，包括未 @ 的聊天。是否触发回复请在完整控制台「设置 → 聊天 → 运行节奏 → 活跃设置」调整；1 档仅被 @ 时触发，普通聊天仍可作为后续上下文。</p>
+<p class="muted small">旧版「只接收 @」设置会转成 1 档（含分群/峰谷档位），避免升级后突然频繁调用模型；此后以响应档位为准，不再丢弃普通消息。已启用的活跃模式、主动任务及确定性插件仍按各自设置工作。</p>
 <p id="identity-help" class="muted small">若在 .env 填写凭据，它们会优先于此处配置。支持文字、图片；加群及全量群消息以平台权限为准。</p></section>
 <section id="model-settings"><h2>02 · 模型服务 <span id="shared-model-label" class="badge" hidden>所有机器人共用</span></h2>
 <div class="model-current"><strong id="active-model">正在读取当前模型…</strong><div id="active-model-endpoint" class="muted small"></div></div>
@@ -56,7 +57,7 @@
 <section><h2>03 · 可用私聊</h2><label>允许的用户 OpenID<textarea id="private" placeholder="每行一个 OpenID"></textarea></label>
 <p class="muted small">默认不开放任何会话。先向机器人发一句消息，在下方发现列表中添加，再重新发消息。</p></section>
 <section><h2>04 · 可用群聊</h2><label>允许的群 OpenID<textarea id="groups" placeholder="每行一个群 OpenID，不是数字 QQ 群号"></textarea></label>
-<p class="muted small">仅在机器人具有加群权限时有效。入群后 @ 一次，群标识会出现在下方。无需 @ 模式还受完整控制台的响应档位限制。</p></section>
+<p class="muted small">仅在机器人具有加群权限时有效。入群后 @ 一次，群标识会出现在下方。普通群消息是否由平台推送取决于 QQ 授权；接收入库不等于触发模型或保证回复。</p></section>
 <section class="wide"><h2>最近发现的会话</h2><div id="peers" class="muted">暂无。等待 QQ 推送事件后可添加白名单。</div>
 <p class="muted small">这里仅列已观察到的会话，不是完整好友或群列表。可设置本地群备注，不修改 QQ 群名。接收记录仅保留近期处理状态，不保存正文或发送者；旧版本记录不会补录。未授权会话不存聊天正文、不调用模型。</p></section>
 </div><div class="actions"><button id="save" type="submit">保存并应用</button><button id="refresh" type="button" class="secondary">刷新连接状态</button><button id="logout" type="button" class="secondary">退出登录</button></div>

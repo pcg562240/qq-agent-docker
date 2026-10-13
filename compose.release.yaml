@@ -2,7 +2,7 @@
 name: qq-agent
 services:
   qq-agent:
-    image: ${QQ_AGENT_IMAGE:-ghcr.io/pcg562240/qq-agent-docker:0.4.7-docker.1}
+    image: ${QQ_AGENT_IMAGE:-ghcr.io/pcg562240/qq-agent-docker:0.4.0-docker.1}
     init: true
     restart: unless-stopped
     ports:

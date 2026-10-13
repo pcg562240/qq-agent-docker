@@ -1,7 +1,7 @@
 {
   "id": "memory-growth",
   "name": "记忆库自增长",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "apiVersion": 1,
   "category": "knowledge",
   "description": "记忆候选抽取、审核、检索和生命周期。需要 MongoDB；模型抽取默认关闭，需明确启用；无查询向量时使用归一化词面检索，按群隔离。",
@@ -42,7 +42,8 @@
     "mongoUri": {
       "type": "string",
       "label": "MongoDB 连接串",
-      "description": "记忆库独立库 qq_agent_memory，与知识库物理隔离。连不上时记忆库不工作（降级跳过），不卡聊天。"
+      "description": "记忆库独立库 qq_agent_memory，与知识库物理隔离。连不上时记忆库不工作（降级跳过），不卡聊天。",
+      "secret": true
     },
     "mongoDb": {
       "type": "string",

@@ -893,6 +893,16 @@ async execute(ctx, args) {
 | `activeMembers(chatKey)` | 活跃成员 |
 | `muteUnread(chatKey)` / `clearChat(chatKey)` | 静音 / 清空 |
 
+**Docker 适配层的模型消息编号**：长度 ≥64 的协议消息 ID 在提示词、历史查询和图片查询结果中显示为 `m序号-校验码` 短编号；短编号只在当前聊天、对应存档记录仍存在且未撤回时有效。不要自行截断、转成数字、模糊匹配或回退到最新消息。
+
+模型调用工具时，核心 `executeTool` 会先将顶层 `messageId`、`message_id`、`replyToMessageId`，以及 `references[].message_id` / `mask.message_id` 中的短编号精确还原为原始协议 ID，再交给技能的 `execute(ctx, args)`。因此这些字段可直接调用 `ctx.store.findByMid(ctx.chatKey, args.message_id)`；`ctx.store` 和存档本身不存短编号，QQ 发送仍使用原始 ID。绘图扩展原有 `#数字` 本地序号语法保持不变。
+
+此映射不递归修改任意字段、正文、成员 ID、URL 或任务 ID；插件直接调用其他函数、钩子的 `argsRaw` 也不自动改写。使用自定义参数字段时需要自行明确适配，不能假定 `findByMid` 接受短编号。历史完整 ID 仍兼容，找不到或编号失效应提示重新查询，不能猜测图片/回复目标。
+
+**机器人自己的回复归属**：通过 `ctx.sender` 发送文字、图片、表情或媒体成功后，存档可带 `responseTo: {chatKey, messageId, localId, userId, userName}`。它在入队时从已固定的真实回复目标捕获，记录“原提问＋回复对象”，不是发送正文或 QQ 引用参数。提示词、`get_recent_messages` 和 `get_message_detail` 会展示该关联，并把可用的长消息 ID 转成短编号。它与 `reply` 引用摘要/媒体相互独立：例如给甲解释乙的历史消息，回复对象仍是甲。
+
+原消息撤回/删除/裁剪后只保留已记录的对象，模型侧不再提供可调用的原消息编号，也不复制原文或图片。没有可靠目标的主动通知和旧存档不补猜对象。OneBot 仅据显式 @／可核验引用记录，不推断最近说话人。扩展仍必须走 `ctx.sender`，不要自行拼接这些标注或拿历史关联充当本轮发送目标。
+
 ### 10.4 `ctx.memory` 方法
 
 | 方法 | 说明 |

@@ -9,7 +9,7 @@ export function dockerEnvironment(config, env = process.env) {
     allowedHosts: parseConsoleAllowedHosts(env.QQ_AGENT_ALLOWED_HOSTS || '') };
   out.snowluma = { ...out.snowluma, autoLaunch: false, account: '' };
   out.extensions = { ...out.extensions, hotReload: false };
-  out.qqbot = { enabled: true, appId: '', clientSecret: '', requireMention: true,
+  out.qqbot = { enabled: true, appId: '', clientSecret: '',
     markdown: false, ...out.qqbot };
   for (const [key, name] of Object.entries({ appId: 'QQBOT_APP_ID', clientSecret: 'QQBOT_APP_SECRET' })) {
     if (env[name]) out.qqbot[key] = env[name];

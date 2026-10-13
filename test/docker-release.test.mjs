@@ -9,7 +9,7 @@ test('release compose uses a versioned GHCR image without altering isolation or 
   assert.equal(release.name, local.name);
   const { image, ...service } = release.services['qq-agent'];
   const { image: _, build, ...localService } = local.services['qq-agent'];
-  assert.match(image, /^\$\{QQ_AGENT_IMAGE:-ghcr\.io\/pcg562240\/qq-agent-docker:0\.4\.7-docker\.1\}$/);
+  assert.match(image, /^\$\{QQ_AGENT_IMAGE:-ghcr\.io\/pcg562240\/qq-agent-docker:0\.4\.0-docker\.1\}$/);
   assert.equal(service.build, undefined);
   delete service.environment.QQ_AGENT_CONSOLE_TOKEN;
   delete localService.environment.QQ_AGENT_CONSOLE_TOKEN;

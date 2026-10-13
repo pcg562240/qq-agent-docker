@@ -13,10 +13,12 @@
 //   read:      已读状态（运行开始时批量置 true）
 //   reply:     可选 { messageId, refKey, sender, text, media, source, unavailable }：引用摘要及媒体（与本条图片分开）
 //   media:     可选 [{ kind, url, file, faceId, summary }] 原始媒体定位信息
+//   responseTo:可选 { chatKey, messageId, localId, userId, userName }：自己发言的回复归属，非 QQ 引用/媒体
 // }
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';
+import { normalizeResponseTo } from './reply-history.js';
 
 const MESSAGES_DIR = path.join(DATA_DIR, 'messages');
 
@@ -110,8 +112,9 @@ export class ChatStore {
   }
 
   /** 记录机器人自己发出的消息（已读）。 */
-  appendSelf(chatKey, { text, ts, mid = null }) {
+  appendSelf(chatKey, { text, ts, mid = null, responseTo = null }) {
     const st = this.#state(chatKey);
+    const target = normalizeResponseTo(responseTo, chatKey);
     const entry = {
       id: st.nextLocalId++,
       mid: mid ?? null,
@@ -122,7 +125,8 @@ export class ChatStore {
       self: true,
       read: true,
       reply: null,
-      media: []
+      media: [],
+      ...(target ? { responseTo: target } : {})
     };
     st.messages.push(entry);
     this.#trim(st);

@@ -1,3 +1,4 @@
+import { createProfileBackupRoutes } from './profile-backup-routes.js';
 import { isAtMe } from './prompt.js';
 // 总装：OneBot 事件接入 → 存储 → 编排器；HTTP API + SSE 给 UI。
 // Electron 主进程与 headless 服务器都从这里启动。
@@ -1518,7 +1519,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
   // ⚠️ token 必须在内：server.peer.token（对端控制台令牌）与 server.token（本实例
   //    控制台令牌）此前都被当作普通字段明文回传。server.token 只有持令牌者才读得到
   //    还说得过去；peer.token 任意打开主控制台的页面都能看到对端令牌 —— 纯泄露。
-  const SECRET_KEY_PATTERN = /(apikey|api_key|accesstoken|access_token|communitykey|cookie|secret|password|privatekey|private_key|sessdata|token)/i;
+  const SECRET_KEY_PATTERN = /(apikey|api_key|accesstoken|access_token|communitykey|cookie|secret|password|privatekey|private_key|sessdata|token|mongouri)/i;
   // 形如 apiKeyFrom 的字段存的是"密钥来源标识"（如 manual），不是密钥本身，不要脱敏
   const SECRET_KEY_EXCLUDE = /from$/i;
 
@@ -1635,7 +1636,8 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     const restart = () => { if (!triggered) { triggered = true; onProfileSwitch(); } };
     res.once('finish', restart); res.once('close', restart);
   }
-  const apiRoutes = [...createRobotProfileRoutes({ profiles, readBody, switchRobot, deleteRobot, context: profileContext }),
+  const apiRoutes = [...createProfileBackupRoutes({profiles,readBody,restart:restartProfile,isBusy:()=>orchestrator.activeRuns.size>0 || orchestrator.runningChats.size>0 || orchestrator.consolidating.size>0}),
+    ...createRobotProfileRoutes({ profiles, readBody, switchRobot, deleteRobot, context: profileContext }),
     ...createGroupNameRoutes({ groupNames, readBody, emit }),
     ...createQQLoginRoutes({ qqLogin, onebot, readBody, emit, profiles, switchRobot }), ...createRoutes({
     store, memory, sessions, onebot, orchestrator, sender, groupNames,
@@ -1675,7 +1677,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
       res.setHeader('set-cookie', 'qq_agent_console=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
       return json(res, 200, { ok: true });
     }
-    if (['/', '/index.html', '/connection.html'].includes(pathname) && !authorize(req)) {
+    if (['/', '/index.html', '/connection.html', '/backup.html'].includes(pathname) && !authorize(req)) {
       res.writeHead(302, { location: '/login.html', 'cache-control': 'no-store' }); res.end(); return;
     }
 

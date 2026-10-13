@@ -209,7 +209,8 @@ export class QQBotClient {
       if (reason !== 'processing') diagnostic(reason);
     };
     if (!this.allow(kind, id)) { record('not_allowed'); return; }
-    if (kind === 'group' && this.getOptions().requireMention !== false && !event.officialAtMe) { record('not_mentioned'); return; }
+    // All allowed messages reach the store. @ controls the orchestrator's
+    // response tier, never whether ordinary group context is discarded.
     if (event.officialReply) {
       const refKey = event.officialReply.refKey;
       const mid = this.referenceIndex.get(`${key}\0${refKey}`) || refKey;
