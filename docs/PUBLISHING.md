@@ -100,3 +100,12 @@ docker compose ps
 - 用户授权增加 MongoDB 内网服务/独立卷/专属 readWrite 账号，只更新当前机器人两个插件的连接字段；身份、模型、名单、人设、插件开关及抽取/注入开关均未改。其余受保护文件及外置扩展源文件保持一致，管理员凭据不进入 Agent 环境。
 - 两个生产看板均返回 MongoDB 已连接；旧 @ 接收策略在内存迁移到 1 档，普通消息接收入库与触发分离；备份页面与状态接口可用。新版默认小鲸鱼只影响新建/主动选用模板，不覆盖已有会话人设。
 - 没有在生产演示导入或自动发送 QQ 测试消息。发布流水线验收另行记录。
+
+### v0.4.0-docker.1 发布验收（2026-10-14）
+
+- 公开发行提交 `a4019e44158a2aad9fb9273fda5dd8dba31ff765`，仅推干净 `public:main` 与精确发行标签，旧标签保持原样。
+- [双架构流水线](https://github.com/pcg562240/qq-agent-docker/actions/runs/38428681886) 成功：AMD64／ARM64 均通过 413 项离线测试、35 项平台测试和各自实际镜像隔离启动，再发布合并清单。
+- GHCR `0.4.0-docker.1` 和 `latest` 已发布，版本清单匿名读取成功、含 `linux/amd64` / `linux/arm64`；digest `sha256:c572d89fa299cd867146211814d38fc767dc4d5104492429735042c913b5233f`。
+- [Release](https://github.com/pcg562240/qq-agent-docker/releases/tag/v0.4.0-docker.1) 已公开并设为当前发行；`compose.yaml`、`compose.mongodb.yaml`、`env.example`、`SHA256SUMS` 均从公开下载地址重新读取并校验一致。
+- 本机完整匿名镜像拉取在约 8 分钟后仍等待一个大层，已停止该额外验证客户端；**不把匿名清单验证或 CI 冒烟宣称为本机完整匿名拉取成功**。本机运行的是已单独验证的同源码构建镜像，两个生产服务保持 healthy。
+- CI 的旧固定 Actions 收到 Node 20 运行时弃用提示（GitHub 已用 Node 24 执行），流水线仍成功；今后更新 Action 固定 SHA 时单独审核，不影响应用 Node 22 运行时。
