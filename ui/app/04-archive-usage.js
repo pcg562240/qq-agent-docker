@@ -104,10 +104,11 @@ function renderChatMessages() {
 
   detail.innerHTML = `
     <div class="detail-header">
-      <h2>${esc(name)} ${meta.unread ? `<span class="unread-pill">${meta.unread} 未读</span>` : ''}</h2>
+      <h2><span id="chat-name-title">${esc(name)}</span> ${meta.unread ? `<span class="unread-pill">${meta.unread} 未读</span>` : ''}</h2>
       <div class="sub"><span data-field="chat-msg-count"></span></div>
     </div>
     <div class="chat-toolbar">
+      ${key.startsWith('group:') ? '<button class="btn btn-small" id="chat-alias-btn">群备注</button>' : ''}
       <button class="btn btn-small" id="chat-wake-btn">唤醒一次处理</button>
       <button class="btn btn-small" id="chat-read-btn">全部标为已读</button>
       <button class="btn btn-small" id="chat-mute-btn" title="仅屏蔽：把未读标记为已读，不再触发回复（消息保留）">仅屏蔽</button>
@@ -125,6 +126,7 @@ function renderChatMessages() {
     <div class="list-more muted" id="chat-msg-more"></div>`;
 
   // 工具栏事件：只在这里绑一次
+  $('#chat-alias-btn')?.addEventListener('click', () => editGroupAlias(key));
   $('#chat-wake-btn').addEventListener('click', async () => {
     await api(`/api/chats/${key.replace(':', '_')}/wake`, { method: 'POST', body: '{}' });
     refreshStatus();

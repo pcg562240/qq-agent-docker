@@ -1,9 +1,9 @@
 {
   "id": "weather-alert",
   "name": "灾害天气预警",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
-  "category": "query",
+  "category": "utility",
   "description": "查询中央气象台正在生效的台风、寒潮、暴雨、高温等灾害天气预警信号，可按地区与灾种筛选。",
   "author": "QQ Agent",
   "enabledByDefault": true,

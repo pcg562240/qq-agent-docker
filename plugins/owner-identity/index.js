@@ -24,7 +24,7 @@ let cfg = () => ({});
 let log = () => {};
 
 /** QQ 号合法形态：5~15 位纯数字（QQ 号从 10000 起发）。名字、卡片、#消息id 都进不来。 */
-const QQ_NUMBER = /^\d{5,15}$/;
+const QQ_NUMBER = /^(?:\d{5,20}|[a-fA-F0-9]{32})$/;
 
 /** 主人行首标注的标记。出站时必须剥除，绝不能出现在群里。 */
 export const OWNER_MARK = '主人';

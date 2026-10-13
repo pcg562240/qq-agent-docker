@@ -59,6 +59,8 @@ export function dispose() {
 function globalTierId() {
   const c = mergeConfig(cfg());
   if (!affinityStore) return { tierId: c.tierIdOf ? undefined : 3, value: c.baseline, count: 0 };
+  // This module is a reader, never flush a stale copy over the live affinity writer.
+  affinityStore = new AffinityStore({ dataDir: path.join(DATA_DIR, 'affinity') });
   const states = affinityStore.loadAll();
   return globalMoodOf(states, c);
 }

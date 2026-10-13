@@ -15,7 +15,7 @@ let fetchImpl = (...a) => fetch(...a);
 let reverserMod = null;
 async function getReverser() {
   if (!reverserMod) {
-    try { reverserMod = await import('../reverse-image/reverser.js'); } catch { reverserMod = null; }
+    try { reverserMod = await import('../../reverse-image/reverser.js'); } catch { reverserMod = null; }
   }
   return reverserMod;
 }

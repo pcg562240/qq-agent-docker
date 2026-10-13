@@ -1,0 +1,1155 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-13",
+  "scope": "73 bundled + 5 currently installed modules; not the entire marketplace",
+  "modules": [
+    {
+      "id": "api-deals",
+      "manifest": "skills/AI额度情报/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "bili-info",
+      "manifest": "skills/B站视频解析/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "affinity-snapshot",
+      "manifest": "skills/affinity/skill.json",
+      "version": "0.1.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "改为唯一只读 ID，默认关闭，保留 live affinity 配置",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "ask-admin-skill",
+      "manifest": "skills/ask-admin-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "私聊名单/求教入队/管理员答复/跨群隔离/发送未知不重发",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "calculator",
+      "manifest": "skills/calculator/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "chatgpt2api-image",
+      "manifest": "skills/chatgpt2api-image/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有 docker-chatgpt2api 模拟协议/身份模型设置隔离",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "chatgpt2api-search",
+      "manifest": "skills/chatgpt2api-search/skill.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有 docker-chatgpt2api 模拟搜索协议",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "check-in",
+      "manifest": "skills/check-in/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "conv-memory-skill",
+      "manifest": "skills/conv-memory-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "数字及 OpenID 写入/空数据拒绝",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "emotion-skill",
+      "manifest": "skills/emotion-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/异步成功与失败",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "feeling-skill",
+      "manifest": "skills/feeling-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/冻结请求者",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "forward-skill",
+      "manifest": "skills/forward-skill/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "help-board",
+      "manifest": "skills/help-board/skill.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "image-gen-skill",
+      "manifest": "skills/image-gen-skill/skill.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有生图/搜索联动专项",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "image-generate",
+      "manifest": "skills/image-generate/skill.json",
+      "version": "1.3.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "keyword-reply",
+      "manifest": "skills/keyword-reply/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "knowledge-memes",
+      "manifest": "skills/knowledge-memes/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "knowledge-verify",
+      "manifest": "skills/knowledge-verify/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/图片路径及网络边界",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "meme-lib",
+      "manifest": "skills/meme-lib/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/不伪造搜索命中",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "memory-growth-skill",
+      "manifest": "skills/memory-growth-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/会话过滤",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "memory-recall",
+      "manifest": "skills/memory-recall/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "mood-skill",
+      "manifest": "skills/mood-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/错误回报",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "music-skill",
+      "manifest": "skills/music-skill/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "random-image",
+      "manifest": "skills/random-image/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "reverse-image",
+      "manifest": "skills/reverse-image/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "reverse-image-pro",
+      "manifest": "skills/reverse-image-pro/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "schedule",
+      "manifest": "skills/schedule/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "search-aggregator-skill",
+      "manifest": "skills/search-aggregator-skill/skill.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有聚合搜索路由专项",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "sticker-annotate",
+      "manifest": "skills/sticker-annotate/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "sticker-annotate-plus",
+      "manifest": "skills/sticker-annotate-plus/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "text-tools",
+      "manifest": "skills/text-tools/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "threads-skill",
+      "manifest": "skills/threads-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "能力延迟加载/异步查询",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "timed-message",
+      "manifest": "skills/timed-message/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "todo-skill",
+      "manifest": "skills/todo-skill/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "逐人去重/会话注入/写失败",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "voice-tts-skill",
+      "manifest": "skills/voice-tts-skill/skill.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "weather-alert",
+      "manifest": "skills/weather-alert/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "weather-query",
+      "manifest": "skills/weather-query/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "send-forward",
+      "manifest": "skills/合并转发发送/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "wiki-search",
+      "manifest": "skills/百科查询/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "people-memory",
+      "manifest": "skills/群友印象/skill.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "image-lib",
+      "manifest": "skills/自定义图库/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "self-impressions",
+      "manifest": "skills/自我印象/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "memory-admin",
+      "manifest": "skills/记忆管理/skill.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "account-pool",
+      "manifest": "plugins/account-pool/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "affinity",
+      "manifest": "plugins/affinity/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "多人逐人计分/OpenID 搜索/设置映射/轮回持久化/实例定时器",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "ban-state",
+      "manifest": "plugins/ban-state/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "body-state",
+      "manifest": "plugins/body-state/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "browse-lock",
+      "manifest": "plugins/browse-lock/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "conversation-memory",
+      "manifest": "plugins/conversation-memory/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "image-compat",
+      "manifest": "plugins/image-compat/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "instance-lock",
+      "manifest": "plugins/instance-lock/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "kb-growth",
+      "manifest": "plugins/kb-growth/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "词面归一化评分/租户过滤/失败保留队列/审计路径/定时器清理",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "media-download",
+      "manifest": "plugins/media-download/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "meme-engine",
+      "manifest": "plugins/meme-engine/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "memory-growth",
+      "manifest": "plugins/memory-growth/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "合成模型抽取/隐私过滤/审核晋升/重复/归档确认/审计先于删除/慢停用竞态",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "mood-tune",
+      "manifest": "plugins/mood-tune/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "owner-identity",
+      "manifest": "plugins/owner-identity/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "OpenID 精确身份",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "proactive-chat",
+      "manifest": "plugins/proactive-chat/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "共享禁言与解禁/运行守卫真实编排/只计发送/分群窗口",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "red-packet-radar",
+      "manifest": "plugins/red-packet-radar/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "reply-safety",
+      "manifest": "plugins/reply-safety/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "search-aggregator",
+      "manifest": "plugins/search-aggregator/plugin.json",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有 docker-search-aggregator 聚合/失败/模型开关测试",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "speaker-identity",
+      "manifest": "plugins/speaker-identity/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "OpenID 标签剥离/现有 mention 路由回归",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "speech-to-text",
+      "manifest": "plugins/speech-to-text/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "thinking-adapters",
+      "manifest": "plugins/thinking-adapters/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "threads",
+      "manifest": "plugins/threads/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "真实 sessionId 注入/停用清理",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "video-frames",
+      "manifest": "plugins/video-frames/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "候选 Linux 镜像真实 ffmpeg 生成并抽取合成视频",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "wake-policy",
+      "manifest": "plugins/wake-policy/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "proactiveChat",
+      "manifest": "plugins/主动找聊/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "echo-guard",
+      "manifest": "plugins/复读拦截/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "scheduled-announcer",
+      "manifest": "plugins/定时文案推送/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "bot-emotion",
+      "manifest": "plugins/本体情绪/plugin.json",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "role-tool-sync",
+      "manifest": "plugins/角色卡工具同步/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "保留下一个角色卡章节/停用取消延时",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "price-feed",
+      "manifest": "plugins/远程价格表/plugin.json",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "基础覆盖；外部服务/全部业务组合未穷尽验证",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "bangumi-lookup",
+      "manifest": "examples/skills/bangumi-lookup/skill.json",
+      "version": "1.1.0",
+      "distribution": "installed",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "外置布局/搜索/详情/缓存/输入校验/429错误",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "comfy-draw",
+      "manifest": "examples/skills/comfy-draw/skill.json",
+      "version": "2.0.0",
+      "distribution": "installed",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有 comfy-draw 工作流/参考图/失败/发送测试，未用 GPU",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "steam-deals",
+      "manifest": "examples/skills/steam-deals/skill.json",
+      "version": "1.5.0",
+      "distribution": "installed",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "现有 steam-deals 全套模拟端点测试/外置布局加载",
+      "changed": false,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "verify-first",
+      "manifest": "examples/skills/verify-first/skill.json",
+      "version": "1.0.1",
+      "distribution": "installed",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "外置布局/引用提取/拒绝私网及凭据/限流式抓取",
+      "changed": true,
+      "liveBusinessTest": false
+    },
+    {
+      "id": "whale-memes",
+      "manifest": "examples/skills/whale-memes/skill.json",
+      "version": "1.0.1",
+      "distribution": "installed",
+      "baseline": [
+        "manifest",
+        "JS syntax/imports",
+        "registration/tool schema"
+      ],
+      "functionalCoverage": "外置布局/索引缓存/图片字节校验/发送留档与失败",
+      "changed": true,
+      "liveBusinessTest": false
+    }
+  ],
+  "tests": {
+    "local": {
+      "passed": 371,
+      "failed": 0
+    },
+    "linux": {
+      "passed": 371,
+      "failed": 0
+    },
+    "platform": {
+      "passed": 35,
+      "failed": 0
+    },
+    "upstream": "prompt anchors, message IDs, wake semantics passed",
+    "safeFetchFile": 6,
+    "officialOffline": 147,
+    "extensions": {
+      "passed": 116,
+      "failed": 0
+    },
+    "video": "ffmpeg: 2 synthetic frames verified",
+    "releaseSmoke": "non-root/read-only/HTTP/private-path/notice checks passed",
+    "installedComfyExact": {
+      "passed": 20,
+      "failed": 0,
+      "note": "Runtime source differs only in configured local server default; tested exact installed source with mocked transport, no GPU call."
+    }
+  },
+  "deployment": {
+    "status": "deployed-verified",
+    "sourceCommit": "6a574e87c2e61c51aac8d921ef820b34d927c6fe",
+    "imageId": "sha256:d604fd2389f6337b0164994f2142ba74ac4ac71f6cab725654861ac541d69a99",
+    "healthy": true,
+    "qqConnected": true,
+    "modules": 78,
+    "active": 39,
+    "broken": 0,
+    "protectedFiles": 42,
+    "configurationUnchanged": true,
+    "envUnchanged": true,
+    "externalSourceFilesUpdated": 4,
+    "updatedExtensions": [
+      "verify-first@1.0.1",
+      "whale-memes@1.0.1"
+    ],
+    "backup": "complete volume, previous image and environment saved privately; SHA-256 and tar members verified",
+    "published": false
+  },
+  "limits": [
+    "No messages sent to real QQ for testing",
+    "No paid model/image/ComfyUI/GPU calls",
+    "Mongo data path verified with test doubles, no production database migration",
+    "Image/search/weather/voice/media services still require valid credentials, network and provider availability",
+    "Memory extraction and auto-approval default off; no enable/configuration changes",
+    "Catalog baseline is the bundled version, not a blind replacement by market packages"
+  ]
+}

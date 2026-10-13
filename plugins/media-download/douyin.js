@@ -1,3 +1,4 @@
+import { DATA_DIR } from '../../src/config.js';
 ﻿// 抖音访问与下载公共库
 //
 // 供 data/plugins/ 下抖音相关插件共用（与 src/bili.js 同构）：
@@ -60,7 +61,7 @@ async function sendMediaSegments({ onebot, sender, kind, chatId }, segments, { l
   if (onebot?.sendSegments) await onebot.sendSegments(kind, chatId, segments);
 }
 
-export const CACHE_DIR = path.join(process.cwd(), 'data', 'media-cache', 'douyin');
+export const CACHE_DIR = path.join(DATA_DIR, 'media-cache', 'douyin');
 // 小件（参数解包/文件名安全化/目录清扫/失败通知）收口在 media-common.js，这里 re-export 保持插件契约
 export { resolveParam, sleep, safeName };
 

@@ -1,11 +1,12 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // threads-skill —— LLM 型技能：讨论线工具（宿主 tools.js 的 note_discussion 照搬）
 //
 // 软依赖 plugins/threads 的 threads.record / threads.select。
 // 缺插件时能力为 undefined，工具如实报「讨论线未启用」，不崩。
 
 export function setup(api) {
-  const recordFn = api.capability('threads.record');
-  const selectFn = api.capability('threads.select');
+  const recordFn = capabilityCall(api, 'threads.record');
+  const selectFn = capabilityCall(api, 'threads.select');
   const ok = (d) => ({ content: typeof d === 'string' ? d : JSON.stringify(d, null, 2) });
   const err = (m) => ({ content: m, isError: true });
 
@@ -27,9 +28,9 @@ export function setup(api) {
       required: ['topic'],
     },
     async execute(ctx, args) {
-      if (!recordFn) return err('讨论线未启用（需要启用 plugins/threads 插件）。');
+      if (!api.hasCapability('threads.record')) return err('讨论线未启用（需要启用 plugins/threads 插件）。');
       try {
-        const r = recordFn({
+        const r = await recordFn({
           chatKey: ctx.chatKey,
           topic: String(args.topic ?? '').trim(),
           summary: String(args.summary ?? '').trim(),
@@ -50,9 +51,9 @@ export function setup(api) {
     icon: '📋',
     parameters: { type: 'object', properties: {} },
     async execute(ctx) {
-      if (!selectFn) return err('讨论线未启用（需要启用 plugins/threads 插件）。');
+      if (!api.hasCapability('threads.select')) return err('讨论线未启用（需要启用 plugins/threads 插件）。');
       try {
-        const r = selectFn({ chatKey: ctx.chatKey });
+        const r = await selectFn({ chatKey: ctx.chatKey });
         return ok({
           总数: r?.total ?? 0,
           活跃层: (r?.active || []).map((x) => ({ 话题: x.topic, 分数: x.score })),

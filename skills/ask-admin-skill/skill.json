@@ -1,12 +1,20 @@
 {
   "id": "ask-admin-skill",
   "name": "管理员求教",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "category": "utility",
   "description": "向管理员私下求教（ask_admin）+ 内部知识沉淀与查询（internal_knowledge）。搞不定的问题问管理员，答复沉淀进内部知识段，下次同类问题直接答。",
   "enabledByDefault": false,
-  "settings": {},
-  "configSchema": {},
+  "settings": {
+    "adminUserId": ""
+  },
+  "configSchema": {
+    "adminUserId": {
+      "type": "string",
+      "label": "管理员 QQ / 官方 OpenID",
+      "description": "完整私聊用户 ID，必须同时加入可用私聊名单；不自动开启平台主动消息权限。"
+    }
+  },
   "capabilities": []
 }

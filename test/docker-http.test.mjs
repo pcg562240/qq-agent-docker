@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 test('headless HTTP authentication, OpenID routing, ingress, persistence and shutdown', { timeout: 45_000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qqa-http-'));
-  const token = 'test-console-token-abcdefghijklmnopqrstuvwxyz';
+  const token = 'testP4ss_9'; // Synthetic 10-character chosen password; never a real credential.
   let child, output = '';
   t.after(() => { child?.kill('SIGKILL'); fs.rmSync(dir, { recursive: true, force: true }); });
   const socket = net.createServer(); socket.listen(0, '127.0.0.1'); await once(socket, 'listening');

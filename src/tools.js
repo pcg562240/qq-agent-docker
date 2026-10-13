@@ -15,6 +15,7 @@ import { validateImageUrl, safeFetchBinary, browseLockState, checkBrowseLock } f
 import { webSearch, webFetch } from './web-search.js';
 import { expandForwardNodes } from './onebot.js';
 import { registerTool, listTools } from './tool-registry.js';
+import { normalizeToolParameters } from './tool-schema.js';
 import { holidayOn, upcomingHoliday } from './holidays.js';
 import { compressImage } from './image-compress.js';
 import { localStickerPath } from './sticker-manager.js';
@@ -156,6 +157,7 @@ function loadPluginTools() {
 
 /** 注册所有内置工具到 registry。 */
 function registerAllTools() {
+  const legacyMentions = getConfig().channel?.type === 'qqbot' && getConfig().qqbot?.groupReplyMentionMode === 'legacy';
   // 消息发送类
   registerTool({
     id: 'send_message',
@@ -166,9 +168,9 @@ function registerAllTools() {
     parameters: {
       type: 'object',
       properties: {
-        messages: { description: '要发送的内容：字符串=一条；数组=分多条', oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
+        messages: { description: legacyMentions ? '要发送的内容：字符串=一条；数组=分多条' : '要发送的内容：字符串=一条；数组=分多条。正文不要自行拼接 <@用户ID>、<@!用户ID> 或 CQ @ 码；引用/指定回复对象使用工具参数', oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] },
         replyToMessageId: { type: ['integer', 'string'], description: '要引用/回复的完整消息 id：复制聊天记录中 # 后的 ID，不包含展示前缀 #，不要省略、改写或用省略号缩短；官方通道是长字符串' },
-        atUserId: { type: ['integer', 'string'], description: '要 @ 的群成员 QQ 号或官方 OpenID（原样填写，必须对应提问者，可选）' }
+        atUserId: { type: ['integer', 'string'], description: legacyMentions ? '要 @ 的群成员 QQ 号或官方 OpenID（原样填写，必须对应提问者，可选）' : '可选：群成员 QQ 号或官方 OpenID（原样填写，必须对应提问者）。官方 QQ 群用于选择/校验固定回复对象，是否显示原生 @ 取决于通道模式和权限；不要自行写标签。OneBot 使用原生 @ 段' }
       },
       required: ['messages']
     },
@@ -233,7 +235,11 @@ function registerAllTools() {
         const [tKind, tId] = wantTarget.split(':');
         const allow = getConfig().allow || {};
         const allowList = (tKind === 'group' ? allow.groups : allow.private) || [];
-        const allowedAll = tKind === 'group' ? (allowList.length === 0 && getConfig().allowAllWhenEmpty === true) : (allowList.length === 0);
+        // 白名单空名单口径必须与消息入口 app.allowed() 一致（群/私聊统一：
+        // 空名单 + allowAllWhenEmpty 才放行）。曾经私聊在这里无条件放行，
+        // 入口拒收私聊、send_to 却能替模型把消息发给任意私聊 QQ —— 同一
+        // 白名单概念两处判定相反。
+        const allowedAll = allowList.length === 0 && getConfig().allowAllWhenEmpty === true;
         if (!(allowList.map(String).includes(tId) || allowedAll)) {
           return err(`目标 ${wantTarget} 不在白名单内，不能发送。`);
         }
@@ -928,11 +934,7 @@ function registerAllTools() {
   // 补的是一个明显缺口：此前机器人只能发 QQ 收藏的表情（send_sticker），
   // **无法主动发一张网上找的图**。
   //
-  // 三道闸门（缺一不可）：
-  //   1. 默认关闭 —— security.imageSend.enabled 必须用户显式打开
-  //   2. 预览闸门 —— requirePreview 时先 send_image(url, preview=true) 看一眼，才能真发
-  //   3. 字节校验 —— 魔数确认是真图（防"图片链接其实是防盗链网页"），
-  //      下载走 safe-fetch（SSRF 防护 + 限量 + 浏览锁定）
+  // 安全校验：预览确认、字节魔数校验、safe-fetch（SSRF 防护 + 限量 + 浏览锁定）。
   registerTool({
     id: 'send_image',
     name: '发送网图',
@@ -1218,7 +1220,7 @@ export function toOpenAiTools(defs) {
     function: {
       name: d.id || d.name,   // 优先用 id（英文标识），兼容旧版 name 字段
       description: d.description,
-      parameters: d.parameters
+      parameters: normalizeToolParameters(d.parameters, d.id || d.name)
     }
   }));
 }

@@ -68,7 +68,7 @@ export function syncRoleToolsSection(roleText, enabledTools) {
   if (re.test(text)) {
     return text.replace(re, `${ROLE_TOOLS_START}\n${lines.join('\n') || '- （未开工具）'}\n${ROLE_TOOLS_END}`);
   }
-  const heading = /^##\s*可用工具[^\n]*\n[\s\S]*$/m;
+  const heading = /^##\s*可用工具[^\n]*\n[\s\S]*?(?=^##\s|$(?![\s\S]))/m;
   if (heading.test(text)) {
     return text.replace(heading, buildSection(lines));
   }
@@ -95,6 +95,7 @@ function runSync(log) {
 }
 
 let log = () => {};
+let timer = null;
 
 export function setup(api) {
   log = (...a) => api.log?.(...a);
@@ -102,5 +103,10 @@ export function setup(api) {
 
 export function activate() {
   // 延迟一点：等配置完全就绪
-  setTimeout(() => runSync(log), 2000);
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => { timer = null; runSync(log); }, 2000);
+  timer.unref?.();
 }
+
+export function deactivate() { if (timer) clearTimeout(timer); timer = null; }
+export const dispose = deactivate;

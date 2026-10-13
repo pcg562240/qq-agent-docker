@@ -1,10 +1,31 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { consoleOriginAllowed, parseConsoleAllowedHosts } from '../src/console-auth.js';
+import { consoleOriginAllowed, parseConsoleAllowedHosts, validConsoleToken, consoleAuthorized } from '../src/console-auth.js';
 import { dockerEnvironment } from '../src/docker-env.js';
 
 const server = { token: 'test-only', allowedHosts: parseConsoleAllowedHosts('192.168.100.25:3210,mac-test.local:3210,[fd00::25]:3210') };
 const req = (host, extra = {}) => ({ headers: { host, ...extra }, socket: {} });
+
+test('explicit console passwords accept 8-256 safe characters without accepting empty or malformed tokens', () => {
+  for (const token of ['aB3_-678', 'testP4ss_9', 'x'.repeat(24), 'x'.repeat(64), 'x'.repeat(256)]) {
+    assert.equal(validConsoleToken(token), true);
+  }
+  for (const token of [undefined, null, 12345678, '', '1234567', 'x'.repeat(257), 'abcdefgh\n', 'abc defgh', 'abcdefgh;', '中文password', ['abcdefgh']]) {
+    assert.equal(validConsoleToken(token), false);
+  }
+});
+
+test('password rotation rejects old cookie, header and query credentials', () => {
+  const oldToken = 'fixture-previous-console-token', newToken = 'testP4ss_9';
+  for (const token of [oldToken, newToken]) {
+    for (const request of [
+      { headers: { cookie: `qq_agent_console=${token}` }, url: '/' },
+      { headers: { 'x-console-token': token }, url: '/' },
+      { headers: {}, url: `/?token=${token}` },
+    ]) assert.equal(consoleAuthorized(request, newToken), token === newToken);
+  }
+  assert.equal(consoleAuthorized({ headers: {}, url: '/' }, newToken), false);
+});
 
 test('loopback access remains available without opting into LAN', () => {
   for (const host of ['localhost:3210', '127.0.0.1:3210', '[::1]:3210']) {

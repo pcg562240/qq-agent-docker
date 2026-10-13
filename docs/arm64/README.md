@@ -205,4 +205,3 @@ qqa-linux/
 > 本地无法验证的边界：Cygwin 以 `noacl` 挂载，**`chmod` 设置不了执行位**；
 > WSL 的 `/mnt/f` 同理（drvfs）。所以**构建必须在 ext4 上做**（`~/qqa-build`）。
 > 详见 `06-构建与验证实录.md` §4.6 / §5.3。
-

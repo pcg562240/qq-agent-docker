@@ -1,3 +1,5 @@
+import { memberId } from '../../../src/extension-context.js';
+import { randomUUID } from 'node:crypto';
 // 待办状态机：LLM 自定过期时间；到期自动消失（不注入）。
 // 像「记着明天问一下」——到点就忘，不靠模型每次维护。
 import fs from 'node:fs';
@@ -40,11 +42,11 @@ export function saveTodo({ chatKey, text, expireInMinutes = 120, userId = '', no
   mins = Math.min(7 * 24 * 60, Math.round(mins));
   const now = Date.now();
   const todos = read();
-  const uid = String(userId || '').replace(/^-?\d{5,15}$/, (m) => String(Math.abs(Number(m))));
-  const fixedUid = /^\d{1,15}$/.test(uid) ? uid : '';
+  const fixedUid = memberId(userId);
+  if (String(userId || '').trim() && !fixedUid) return { ok: false, error: '无效的完整用户 ID' };
   // 同会话同文去重，刷新过期时间
-  const key = `${chatKey}|${body.toLowerCase()}`;
-  const existing = todos.find((t) => `${t.chatKey}|${String(t.text).toLowerCase()}` === key);
+  const key = `${chatKey}|${fixedUid}|${body.toLowerCase()}`;
+  const existing = todos.find((t) => `${t.chatKey}|${t.userId || ''}|${String(t.text).toLowerCase()}` === key);
   if (existing) {
     existing.expiresAt = now + mins * 60000;
     existing.updatedAt = now;
@@ -54,7 +56,7 @@ export function saveTodo({ chatKey, text, expireInMinutes = 120, userId = '', no
     return { ok: true, todo: existing, deduped: true };
   }
   const todo = {
-    id: `t${now.toString(36)}`,
+    id: `t${randomUUID()}`,
     chatKey: String(chatKey || ''),
     userId: fixedUid,
     text: body,

@@ -23,7 +23,7 @@ import path from 'node:path';
 let cfg = () => ({});
 let api = null;
 let store = null;
-let dataDir = null;
+let dataDir = path.join(DATA_DIR, 'body-state');
 
 /** 本轮触发内容暂存（before-context 有 triggerEntries，before-llm-messages 没有）。 */
 const pendingTrigger = new Map();
@@ -52,11 +52,13 @@ export function activate(ctx) {
 export function deactivate(ctx) {
   try { store?.close(); } catch {}
   store = null;
+  pendingTrigger.clear();
 }
 
 export function dispose() {
   try { store?.close(); } catch {}
   store = null;
+  pendingTrigger.clear();
 }
 
 function st() {
@@ -261,6 +263,7 @@ export const hooks = {
         if (t) texts.push(t);
       }
       pendingTrigger.set(String(ctx.sessionId || ctx.chatKey || ''), { triggerText: texts.join('\n').slice(0, 800) });
+      while (pendingTrigger.size > 100) pendingTrigger.delete(pendingTrigger.keys().next().value);
     } catch {}
   },
 

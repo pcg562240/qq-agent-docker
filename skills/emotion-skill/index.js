@@ -1,10 +1,11 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // emotion-skill —— LLM 型技能：情绪/本体状态工具（清单 §4.1 情感工具 set_emotion/set_mood 语义）
 // 软依赖：api.capability('bodystate.*') —— 由 plugins/body-state 提供。缺插件时工具如实报「本体状态未启用」。
 
 export function setup(api) {
-  const setEmotionFn = api.capability('bodystate.set-emotion');
-  const setAxesFn = api.capability('bodystate.set-axes');
-  const statusFn = api.capability('bodystate.status');
+  const setEmotionFn = capabilityCall(api, 'bodystate.set-emotion');
+  const setAxesFn = capabilityCall(api, 'bodystate.set-axes');
+  const statusFn = capabilityCall(api, 'bodystate.status');
   const ok = (d) => ({ content: typeof d === 'string' ? d : JSON.stringify(d, null, 2) });
   const err = (m) => ({ content: m, isError: true });
 
@@ -24,7 +25,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!setEmotionFn) return err('本体状态插件未启用（plugins/body-state 没装或未激活）。');
+        if (!api.hasCapability('bodystate.set-emotion')) return err('本体状态插件未启用（plugins/body-state 没装或未激活）。');
         const r = await setEmotionFn({ emotion: String(args.emotion ?? '').trim(), value: args.value });
         if (!r.ok) return err(r.error || '记情绪失败');
         return ok('已记情绪「' + r.name + '」（' + r.current + '）。该干嘛干嘛，别声张。');
@@ -48,7 +49,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!setAxesFn) return err('本体状态插件未启用。');
+        if (!api.hasCapability('bodystate.set-axes')) return err('本体状态插件未启用。');
         const r = await setAxesFn({ energy: args.energy, social: args.social, mood: args.mood });
         if (!r.ok) return err(r.error || '调状态失败');
         return ok('状态已更新（精力 ' + r.axes.energy + ' / 社交 ' + r.axes.social + ' / 心情 ' + r.axes.mood + '）。');
@@ -62,10 +63,10 @@ export function setup(api) {
     description: '查当前本体状态全貌：三维（精力/社交/心情）+ 21 格情绪当前值 + 五条聚合 + 行为概率 + 温度。想知道「她现在状态怎样」时用。只读。',
     category: 'memory',
     icon: '📊',
-    parameters: {},
+    parameters: { type: 'object', properties: {} },
     async execute(ctx) {
       try {
-        if (!statusFn) return err('本体状态插件未启用。');
+        if (!api.hasCapability('bodystate.status')) return err('本体状态插件未启用。');
         const r = await statusFn({});
         if (!r.ok) return err(r.error || '查状态失败');
         return ok({

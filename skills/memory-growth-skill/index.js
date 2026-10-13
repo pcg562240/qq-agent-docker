@@ -1,3 +1,4 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // memory-growth-skill —— LLM 型技能：记忆库工具面（宿主 memory-growth 生命周期语义照搬）
 //
 // 软依赖：api.capability('memory.recall'/'memory.review'/'memory.lifecycle')
@@ -5,9 +6,9 @@
 //   这是防孤儿能力的关键消费方。
 
 export function setup(api) {
-  const recallFn = api.capability('memory.recall');
-  const reviewFn = api.capability('memory.review');
-  const lifecycleFn = api.capability('memory.lifecycle');
+  const recallFn = capabilityCall(api, 'memory.recall');
+  const reviewFn = capabilityCall(api, 'memory.review');
+  const lifecycleFn = capabilityCall(api, 'memory.lifecycle');
 
   const ok = (data) => ({ content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) });
   const err = (msg) => ({ content: msg, isError: true });
@@ -28,8 +29,9 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!recallFn) return err('记忆库插件未启用（plugins/memory-growth 没装或不可用）。');
+        if (!api.hasCapability('memory.recall')) return err('记忆库插件未启用（plugins/memory-growth 没装或不可用）。');
         const r = await recallFn({ query: String(args.query ?? '').trim(), chatKey: ctx.chatKey, topK: Math.min(10, Math.max(1, Number(args.topK) || 5)) });
+        if (r.degraded) return err(r.reason || '记忆数据库不可用');
         if (!r.hits?.length) return ok('没有相关记忆。如实说想不起来，不要编造。');
         return ok({
           ok: true,
@@ -65,7 +67,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!reviewFn) return err('记忆库插件未启用，无法审核。');
+        if (!api.hasCapability('memory.review')) return err('记忆库插件未启用，无法审核。');
         const r = await reviewFn({ action: String(args.action).trim(), memoryId: String(args.memoryId ?? '').trim(), chatKey: ctx.chatKey });
         if (!r.ok) return err(r.error || '审核失败');
         return ok('已 ' + ({ approve: '通过', reject: '拒绝', undo: '撤销' })[args.action] + ' 记忆 ' + args.memoryId + '。简短告知即可。');
@@ -91,9 +93,9 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!lifecycleFn) return err('记忆库插件未启用，无法遗忘。');
+        if (!api.hasCapability('memory.lifecycle')) return err('记忆库插件未启用，无法遗忘。');
         const ids = Array.isArray(args.memoryIds) ? args.memoryIds.map(String) : [String(args.memoryIds)];
-        const r = await lifecycleFn({ op: 'forget', memoryIds: ids });
+        const r = await lifecycleFn({ op: 'forget', memoryIds: ids, chatKey: ctx.chatKey });
         if (!r.ok) return err(r.error || '遗忘失败');
         return ok('已遗忘 ' + (r.count ?? 0) + ' 条记忆（已写审计）。简短告知即可。');
       } catch (e) {
@@ -112,15 +114,16 @@ export function setup(api) {
     parameters: {
       type: 'object',
       properties: {
+        confirm: { type: 'boolean', description: '用户明确确认后设 true；否则只预览' },
         days: { type: 'integer', description: '超过 N 天没被提起的事件；不填则只归档指定的 memoryIds' },
         memoryIds: { type: 'array', items: { type: 'string' }, description: '指定要归档的记忆 id（与 days 二选一）' },
       },
     },
     async execute(ctx, args) {
       try {
-        if (!lifecycleFn) return err('记忆库插件未启用，无法归档。');
+        if (!api.hasCapability('memory.lifecycle')) return err('记忆库插件未启用，无法归档。');
         const r = await lifecycleFn({
-          op: 'archive',
+          op: 'archive', chatKey: ctx.chatKey, confirm: args.confirm === true,
           days: args.days != null ? Number(args.days) : undefined,
           memoryIds: Array.isArray(args.memoryIds) && args.memoryIds.length ? args.memoryIds.map(String) : null,
         });
@@ -149,9 +152,9 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!lifecycleFn) return err('记忆库插件未启用，无法捞回。');
+        if (!api.hasCapability('memory.lifecycle')) return err('记忆库插件未启用，无法捞回。');
         const ids = (Array.isArray(args.memoryIds) ? args.memoryIds : [args.memoryIds]).map(String);
-        const r = await lifecycleFn({ op: 'unarchive', memoryIds: ids });
+        const r = await lifecycleFn({ op: 'unarchive', memoryIds: ids, chatKey: ctx.chatKey });
         if (!r.ok) return err(r.error || '捞回失败');
         return ok('已捞回 ' + (r.count ?? 0) + ' 条记忆。');
       } catch (e) {
@@ -161,8 +164,8 @@ export function setup(api) {
   });
 
   // ── 固定 / 定期清理（宿主 memoryGrowth.weeklyCleanup / pinnedProtected 的那两个设置）──
-  const pinFn = api.capability('memory.lifecycle');       // pin 走同名能力（op:'pin'）
-  const cleanupFn = api.capability('memory.cleanup');
+  const pinFn = capabilityCall(api, 'memory.lifecycle');       // pin 走同名能力（op:'pin'）
+  const cleanupFn = capabilityCall(api, 'memory.cleanup');
 
   api.registerTool({
     id: 'memory_pin',
@@ -181,10 +184,10 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!pinFn) return err('记忆库插件未启用，无法固定。');
+        if (!api.hasCapability('memory.lifecycle')) return err('记忆库插件未启用，无法固定。');
         const ids = (Array.isArray(args.memoryIds) ? args.memoryIds : [args.memoryIds]).map(String);
         const want = args.pinned !== false;
-        const r = await pinFn({ op: want ? 'pin' : 'unpin', memoryIds: ids });
+        const r = await pinFn({ op: want ? 'pin' : 'unpin', memoryIds: ids, chatKey: ctx.chatKey });
         if (!r?.ok) return err(r?.error || '固定失败');
         return ok('已' + (want ? '固定' : '取消固定') + ' ' + (r.count ?? 0) + ' 条记忆。');
       } catch (e) { return err('固定失败：' + (e?.message ?? e)); }
@@ -199,10 +202,10 @@ export function setup(api) {
     icon: '🧹',
     defaultEnabled: false,
     parameters: { type: 'object', properties: {} },
-    async execute() {
+    async execute(ctx) {
       try {
-        if (!cleanupFn) return err('记忆库插件未启用，无法清理。');
-        const r = await cleanupFn();
+        if (!api.hasCapability('memory.cleanup')) return err('记忆库插件未启用，无法清理。');
+        const r = await cleanupFn({ chatKey: ctx.chatKey });
         if (!r?.ok) return err(r?.error || '清理失败');
         return ok(r.archived > 0
           ? '已归档 ' + r.archived + ' 条冷记忆（冷于 ' + r.days + ' 天 / 提及 ≤ ' + r.maxMention + ' 次）。'

@@ -5,6 +5,10 @@ let modelsUI, settingsBusy = false;
 let profiles, profileBusy = false, switching = false, settingsDirty = false;
 let deletingRobot = null;
 let qrId = '', qrTimer, qrBusy = false, qrApplying = false, qrConfirmError = '';
+const ingressStates = { not_allowed: '白名单 / 黑名单拦截', not_mentioned: '未识别到 @ 本机器人',
+  processing: '正在交给消息处理器', forwarded: '已通过通道筛选（不等于模型已回复）',
+  blocked_sender: '发送者被屏蔽，未存档', empty_message: '消息无可处理内容', duplicate: '重复事件，已去重',
+  bot_message: '机器人自身/其他机器人的消息已忽略', error: '消息处理异常，请查看日志' };
 async function api(url, data) {
   const response = await fetch(url, data ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) } : {});
   if (response.status === 401) { location.href = '/login.html'; throw new Error('请重新登录'); }
@@ -141,13 +145,12 @@ async function refresh() {
   for (const peer of integration.peers) {
     const row = document.createElement('div'); row.className = 'peer';
     const label = document.createElement('div');
-    const title = document.createElement('span'); title.textContent = `${peer.kind === 'group' ? '群聊' : '私聊'} · ${peer.id}`;
+    const title = document.createElement('span');
+    title.textContent = `${peer.kind === 'group' ? '群聊' : '私聊'} · ${peer.name && peer.name !== peer.id ? `${peer.name}（${peer.id}）` : peer.id}`;
     label.append(title);
     if (peer.lastSeenAt) {
       const detail = document.createElement('div'); detail.className = 'muted small';
-      const states = { not_allowed: '该条消息被白名单 / 黑名单拦截，保存名单后请重发', not_mentioned: '该条消息未识别到 @ 本机器人',
-        processing: '正在交给消息处理器', forwarded: '已通过通道筛选（不等于模型已回复）', error: '消息处理异常，请查看日志' };
-      detail.textContent = `${new Date(peer.lastSeenAt).toLocaleString()} · ${peer.lastEventType}${peer.kind === 'group' ? ` · @识别：${peer.lastAtMe ? '是' : '否'}` : ''} · ${states[peer.lastIngress] || '已收到'}`;
+      detail.textContent = `${new Date(peer.lastSeenAt).toLocaleString()} · ${peer.lastEventType}${peer.kind === 'group' ? ` · @识别：${peer.lastAtMe ? '是' : '否'}` : ''} · ${ingressStates[peer.lastIngress] || '已收到'}`;
       label.append(detail);
     }
     const add = document.createElement('button'); add.type = 'button'; add.textContent = '加入白名单';
@@ -157,7 +160,32 @@ async function refresh() {
       settingsDirty = true;
       $('message').textContent = '已添加到表单，请点击「保存并应用」。';
     });
-    row.append(label, add); peers.append(row);
+    const actions = document.createElement('div'); actions.className = 'peer-actions'; actions.append(add);
+    if (peer.kind === 'group') {
+      const rename = document.createElement('button'); rename.type = 'button'; rename.className = 'secondary'; rename.textContent = '群备注';
+      rename.addEventListener('click', async () => {
+        if (profileBusy || switching) return;
+        const name = await window.askGroupAlias(peer.groupAlias || '');
+        if (name === null || profileBusy || switching) return;
+        rename.disabled = true;
+        try { await api('/api/group-names', { groupId: peer.id, name }); await refresh(); }
+        catch (error) { $('message').textContent = error.message; }
+        finally { rename.disabled = false; }
+      });
+      const history = document.createElement('button'); history.type = 'button'; history.className = 'secondary'; history.textContent = '接收记录';
+      history.addEventListener('click', async () => {
+        let box = label.querySelector('.ingress-history');
+        if (box) { box.remove(); return; }
+        box = document.createElement('div'); box.className = 'ingress-history muted small'; box.textContent = '正在读取…'; label.append(box);
+        try {
+          const result = await api(`/api/qq/ingress?groupId=${encodeURIComponent(peer.id)}`);
+          box.textContent = `${result.note}\n${result.entries.length ? result.entries.map(entry =>
+            `${new Date(entry.receivedAt).toLocaleString()} · 平台时间 ${new Date(entry.messageAt).toLocaleTimeString()} · @${entry.atMe ? '是' : '否'} · ${ingressStates[entry.reason] || entry.reason} · ${entry.ref}`).join('\n') : '暂无保留记录'}`;
+        } catch (error) { box.textContent = error.message; }
+      });
+      actions.append(rename, history);
+    }
+    row.append(label, actions); peers.append(row);
   }
 }
 async function init() {

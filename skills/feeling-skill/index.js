@@ -1,3 +1,4 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // feeling-skill —— LLM 型技能：好感度工具面（宿主 set_feeling / affinity_check 语义照搬）
 //
 // 软依赖：api.capability('affinity.adjust' / 'affinity.query' / 'affinity.rebirth')
@@ -5,9 +6,9 @@
 //   这是防孤儿能力的关键消费方。
 
 export function setup(api) {
-  const adjustFn = api.capability('affinity.adjust');
-  const queryFn = api.capability('affinity.query');
-  const rebirthFn = api.capability('affinity.rebirth');
+  const adjustFn = capabilityCall(api, 'affinity.adjust');
+  const queryFn = capabilityCall(api, 'affinity.query');
+  const rebirthFn = capabilityCall(api, 'affinity.rebirth');
 
   const ok = (data) => ({ content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) });
   const err = (msg) => ({ content: msg, isError: true });
@@ -30,7 +31,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!adjustFn) return err('好感度插件未启用（plugins/affinity 没装或未激活），无法调好感度。');
+        if (!api.hasCapability('affinity.adjust')) return err('好感度插件未启用（plugins/affinity 没装或未激活），无法调好感度。');
         const r = await adjustFn({
           personId: String(args.userId ?? '').trim(),
           delta: Number(args.delta),
@@ -58,8 +59,8 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!queryFn) return err('好感度插件未启用，无法查。');
-        const who = String(args.userId ?? '').trim() || String(ctx?.requesterId ?? '');
+        if (!api.hasCapability('affinity.query')) return err('好感度插件未启用，无法查。');
+        const who = String(args.userId ?? '').trim() || String(requesterId(ctx));
         if (!who) return err('要指定 userId 或当前说话人');
         const r = await queryFn({ personId: who });
         if (!r.ok) return err('查不到这个人（还没记过）');
@@ -94,7 +95,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!rebirthFn) return err('好感度插件未启用，无法轮回。');
+        if (!api.hasCapability('affinity.rebirth')) return err('好感度插件未启用，无法轮回。');
         if (args.confirm !== true) return err('这是硬操作：请让用户明确确认后再传 confirm=true。');
         const r = await rebirthFn({ personId: String(args.userId ?? '').trim(), confirm: true });
         if (!r.ok) return err(r.error || '轮回失败');

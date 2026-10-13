@@ -56,12 +56,37 @@ test('multi-bot HTTP: migration, save, switch, switch back, QR, shared models, s
   assert.equal((await req('/api/config',{qqbot:{__replace__:{appId:'222'}}})).status,409);
   assert.equal((await req('/api/reset-data',{})).status,409);
   await ipc('receive');await ipc('profile-memory',{text:'ONLY_A_MEMORY'});
+  // Alias and diagnostic routes share normal auth, stale-page and same-origin guards.
+  assert.equal((await fetch(base+'/api/group-names',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})).status,401);
+  assert.equal((await fetch(base+'/api/qq/ingress?groupId=GROUP_with-hyphen')).status,401);
+  assert.equal((await req('/api/qq/ingress?groupId=..%2Fbad')).status,400);
+  assert.equal((await req('/api/group-names',{groupId:'GROUP_with-hyphen',name:'A group'},{'x-qq-profile-context':''})).status,409);
+  assert.equal((await req('/api/group-names',{groupId:'GROUP_with-hyphen',name:'A group'},{origin:'https://evil.invalid'})).status,403);
+  assert.equal((await req('/api/group-names',{groupId:'../bad',name:'x'})).status,400);
+  await json('/api/group-names',{groupId:'GROUP_with-hyphen',name:'A group'});
+  await ipc('receive',{group:true,messageId:'NOT_ALLOWED',content:'UNAUTHORIZED_BODY'});
+  let peer=(await json('/api/integration')).peers.find(p=>p.id==='GROUP_with-hyphen');
+  assert.equal(peer.name,'A group');assert.equal(peer.groupAlias,'A group');
+  let diagnostic=await json('/api/qq/ingress?groupId=GROUP_with-hyphen');
+  assert.equal(diagnostic.entries[0].reason,'not_allowed');assert.ok(!JSON.stringify(diagnostic).includes('UNAUTHORIZED_BODY'));
+  await json('/api/config',{allow:{groups:['GROUP_with-hyphen']},blocklist:{'GROUP_with-hyphen':['BLOCKED_USER']},qqbot:{groupReplyMentionMode:'markdown'}});
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'markdown');
+  await ipc('receive',{group:true,messageId:'BLOCKED',senderId:'BLOCKED_USER'});
+  assert.equal((await json('/api/qq/ingress?groupId=GROUP_with-hyphen')).entries[0].reason,'blocked_sender');
+  await ipc('receive',{group:true,messageId:'ALLOWED'});
+  assert.equal((await json('/api/chats')).chats.find(c=>c.key==='group:GROUP_with-hyphen').chatName,'A group');
+  assert.equal((await json('/api/onebot/groups')).groups.find(g=>g.id==='GROUP_with-hyphen').name,'A group');
+  assert.deepEqual((await ipc('snapshot')).sent,[],'renaming/diagnostics never send QQ messages');
   const memoryA=(await ipc('profile-memory-read')).value;assert.ok(JSON.stringify(memoryA).includes('ONLY_A_MEMORY'));
   const messages='/api/chats/private_USER_with-hyphen/messages';
   assert.equal((await json(messages)).messages.length,1);
   const saved=await json('/api/robots/save',{appId:'222',appSecret:'BOT_B_SECRET',name:'Robot B'});assert.equal(saved.switching,false);
   assert.equal((await json('/api/robots')).accounts.length,2);
   const oldContext=await switchTo('222');
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'off');
+  assert.equal((await req('/api/group-names',{groupId:'GROUP_with-hyphen',name:'STALE'},{'x-qq-profile-context':oldContext})).status,409);
+  assert.deepEqual((await json('/api/qq/ingress?groupId=GROUP_with-hyphen')).entries,[]);
+  await json('/api/group-names',{groupId:'GROUP_with-hyphen',name:'B group'});
   for(const [url,body] of [['/api/robots/delete',{appId:'111',confirmAppId:'111'}],['/api/config',{persona:{botName:'STALE'}}],['/api/config',undefined],['/api/robots/switch',{appId:'111'}],['/api/qq/login/start',{}]]) {
     assert.equal((await req(url,body,{'x-qq-profile-context':oldContext})).status,409);
   }
@@ -74,6 +99,32 @@ test('multi-bot HTTP: migration, save, switch, switch back, QR, shared models, s
   await ipc('receive');await ipc('profile-memory',{text:'ONLY_B_MEMORY'});
   assert.equal((await json(messages)).messages.length,1);
   await switchTo('111');cfg=await json('/api/config');
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'markdown');
+  assert.equal(cfg.qqbot.markdown,false,'private/global Markdown mode unchanged');
+  const beforeDisable=readJson(path.join(profileDir(root,'111'),'config.json'));
+  const sharedBeforeDisable=fs.readFileSync(path.join(root,'shared-models.json'),'utf8');
+  await json('/api/config',{qqbot:{groupReplyMentionMode:'off'}});
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'off');
+  const afterDisable=readJson(path.join(profileDir(root,'111'),'config.json'));
+  assert.deepEqual(afterDisable,{...beforeDisable,qqbot:{...beforeDisable.qqbot,groupReplyMentionMode:'off'}});
+  assert.equal(fs.readFileSync(path.join(root,'shared-models.json'),'utf8'),sharedBeforeDisable);
+  await json('/api/config',{qqbot:{groupReplyMentionMode:'legacy'}});
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'legacy');
+  assert.equal((await ipc('send-tool-parameters')).parameters.properties.messages.description,'要发送的内容：字符串=一条；数组=分多条');
+  assert.deepEqual(readJson(path.join(profileDir(root,'111'),'config.json')),
+    {...afterDisable,qqbot:{...afterDisable.qqbot,groupReplyMentionMode:'legacy'}});
+  await switchTo('222');
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'off');
+  assert.match((await ipc('send-tool-parameters')).parameters.properties.messages.description,/不要自行拼接/);
+  await switchTo('111');
+  assert.equal((await json('/api/integration')).groupReplyMentionMode,'legacy');
+  assert.equal((await json('/api/config')).qqbot.markdown,false);
+  assert.equal(fs.readFileSync(path.join(root,'shared-models.json'),'utf8'),sharedBeforeDisable);
+
+  assert.equal((await json('/api/chats')).chats.find(c=>c.key==='group:GROUP_with-hyphen').chatName,'A group');
+  assert.ok((await json('/api/qq/ingress?groupId=GROUP_with-hyphen')).entries.length>0);
+  await json('/api/group-names',{groupId:'GROUP_with-hyphen',name:''});
+  assert.equal((await json('/api/chats')).chats.find(c=>c.key==='group:GROUP_with-hyphen').chatName,'');
   assert.equal(cfg.qqbot.appId,'111');assert.equal(cfg.persona.botName,'Robot A');assert.equal(cfg.api.model,'shared-second');assert.equal(cfg.api.hasApiKey,true);
   assert.equal((await json(messages)).messages.length,1);
   const restored=JSON.stringify((await ipc('profile-memory-read')).value);assert.ok(restored.includes('ONLY_A_MEMORY'));assert.ok(!restored.includes('ONLY_B_MEMORY'));

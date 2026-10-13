@@ -1,11 +1,12 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // meme-lib —— LLM 型技能：梗库工具面（宿主 memes.js 工具面照搬）
 //
 // 软依赖：api.capability('meme.data'/'meme.cue') —— 能力由 plugins/meme-engine 提供。
 //   缺插件时能力为 undefined，工具如实报「梗库未启用」（防孤儿能力消费方）。
 
 export function setup(api) {
-  const dataFn = api.capability('meme.data');
-  const cueFn = api.capability('meme.cue');
+  const dataFn = capabilityCall(api, 'meme.data');
+  const cueFn = capabilityCall(api, 'meme.cue');
 
   const ok = (data) => ({ content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) });
   const err = (msg) => ({ content: msg, isError: true });
@@ -27,7 +28,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!dataFn) return err('梗库插件未启用（plugins/meme-engine 没装或不可用）。');
+        if (!api.hasCapability('meme.data')) return err('梗库插件未启用（plugins/meme-engine 没装或不可用）。');
         const text = String(args.text ?? '').trim();
         if (!text) return err('要指定 text');
         if (text.length > 60) return err('梗原文太长了（>60 字），只存以后还用得上的短梗。');
@@ -57,17 +58,17 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!dataFn) return err('梗库插件未启用。');
+        if (!api.hasCapability('meme.data')) return err('梗库插件未启用。');
         const limit = Math.min(10, Math.max(1, Number(args.limit) || 5));
         // 先取列表，再用 cueFn 做语义联想排序
         const listR = await dataFn({ op: 'list' });
         if (!listR.ok || !listR.items?.length) return ok('梗库是空的。别硬猜含义，就当普通话说。');
-        let hits = listR.items;
-        if (cueFn) {
+        let hits = [];
+        if (api.hasCapability('meme.cue')) {
           const cueR = await cueFn({ text: String(args.query ?? ''), limit: limit * 3 });
           if (cueR.cues?.length) {
             const order = new Map(cueR.cues.map((c, i) => [c.text, i]));
-            hits = [...listR.items].sort((a, b) => (order.get(a.text) ?? 999) - (order.get(b.text) ?? 999));
+            hits = listR.items.filter(m => order.has(m.text)).sort((a, b) => (order.get(a.text) ?? 999) - (order.get(b.text) ?? 999));
           }
         } else {
           const q = String(args.query ?? '').toLowerCase();
@@ -102,7 +103,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!dataFn) return err('梗库插件未启用。');
+        if (!api.hasCapability('meme.data')) return err('梗库插件未启用。');
         if (args.confirm !== true) return err('这是推荐操作：请让用户确认后再传 confirm=true。收编会把记忆库的梗搬进梗库（自动去重）。');
         const r = await dataFn({ op: 'importFromMemory' });
         if (!r.ok) return err(r.error || '收编失败');
@@ -132,7 +133,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!dataFn) return err('梗库插件未启用。');
+        if (!api.hasCapability('meme.data')) return err('梗库插件未启用。');
         const r = await dataFn({
           op: args.op,
           id: args.targetId,

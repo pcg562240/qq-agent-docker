@@ -17,7 +17,7 @@ set -uo pipefail
 URL="https://mirrors.aliyun.com/rockylinux/9/isos/x86_64/Rocky-9-latest-x86_64-minimal.iso"
 EXPECT=1480048640
 
-echo "==================================================================" 
+echo "=================================================================="
 echo "1. 代理环境变量"
 echo "=================================================================="
 for v in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY no_proxy NO_PROXY; do

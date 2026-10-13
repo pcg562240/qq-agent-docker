@@ -1,3 +1,4 @@
+import { memberId } from '../../src/extension-context.js';
 // 群友印象 / 好感度 —— 移植自魔改包 08-people-memory
 // 数据：优先写全局 data/memory/people/<QQ>.json（跨群共享）；
 // 若 0.31 的 ctx.memory 已支持同一套接口，则直接复用。
@@ -44,8 +45,7 @@ function writePerson(userId, data) {
 
 function normQid(raw) {
   let s = String(raw ?? '').trim().replace(/^["']|["']$/g, '');
-  if (/^-?\d{1,15}$/.test(s)) return String(Math.abs(Number(s)));
-  return '';
+  return memberId(s);
 }
 
 function defaultPerson(userId) {

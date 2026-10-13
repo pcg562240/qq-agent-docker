@@ -1,7 +1,7 @@
 {
   "id": "proactiveChat",
   "name": "主动找聊",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "category": "message",
   "description": "按目标（单个群 / 单个私聊）主动找人聊天：每个目标可独立设置启停、最小/最大间隔、每日上限、安静时段、话题与风格。技术上是确定性插件：自己定时、直接经宿主 sender 发送，不经过模型判断，条件满足就必发。",

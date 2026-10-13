@@ -117,6 +117,8 @@ export function mergeConfig(cfg) {
     out[seg] = { ...DEFAULT_CONFIG[seg], ...(src[seg] || {}) };
   }
   out.rebirth = { ...REBIRTH_DEFAULT, ...(src.rebirth || {}) };
+  if (typeof src.rebirthEnabled === 'boolean') out.rebirth.enabled = src.rebirthEnabled;
+  if (Number.isFinite(Number(src.rebirthBuffMult))) out.rebirth.buffMult = Math.max(1, Math.min(5, Number(src.rebirthBuffMult)));
   out.responseProfiles = { ...RESPONSE_PROFILES_DEFAULT, ...(src.responseProfiles || {}) };
   return out;
 }

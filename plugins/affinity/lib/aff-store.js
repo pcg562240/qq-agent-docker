@@ -4,16 +4,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-let writeTimer = null;
-let pendingDirty = false;
+import { DATA_DIR } from '../../../src/config.js';
+import { memberId } from '../../../src/extension-context.js';
 
 export class AffinityStore {
   constructor({ dataDir } = {}) {
-    this.dir = dataDir || path.join(process.cwd(), 'data', 'affinity');
+    this.dir = dataDir || path.join(DATA_DIR, 'affinity');
     this.stateFile = path.join(this.dir, 'affinity-state.json');
     this.eventFile = path.join(this.dir, 'affinity-events.jsonl');
     this.states = new Map();   // personId → state
     this.dirty = false;
+    this.writeTimer = null;
     this._load();
   }
 
@@ -33,7 +34,8 @@ export class AffinityStore {
   }
 
   getState(personId) {
-    const key = String(personId ?? '');
+    const key = memberId(personId);
+    if (!key) throw Error('无效的成员 ID');
     let s = this.states.get(key);
     if (!s) {
       s = {
@@ -63,15 +65,15 @@ export class AffinityStore {
   }
 
   markDirty() {
-    pendingDirty = true;
+
     this.dirty = true;
     // 2 秒节流（宿主语义）
-    if (writeTimer) return;
-    writeTimer = setTimeout(() => {
-      writeTimer = null;
-      this.flush();
+    if (this.writeTimer) return;
+    this.writeTimer = setTimeout(() => {
+      this.writeTimer = null;
+      try { this.flush(); } catch {}
     }, 2000);
-    writeTimer.unref?.();
+    this.writeTimer.unref?.();
   }
 
   flush() {
@@ -81,15 +83,14 @@ export class AffinityStore {
       const arr = [...this.states.values()];
       const tmp = this.stateFile + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(arr, null, 1));
-      try { fs.unlinkSync(this.stateFile); } catch {}
       fs.renameSync(tmp, this.stateFile);
       this.dirty = false;
-      pendingDirty = false;
-    } catch {}
+
+    } catch (e) { throw Error('好感度写入失败', { cause: e }); }
   }
 
   close() {
-    if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
+    if (this.writeTimer) { clearTimeout(this.writeTimer); this.writeTimer = null; }
     this.flush();
   }
 }

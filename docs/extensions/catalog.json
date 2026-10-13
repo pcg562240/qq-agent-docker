@@ -1,0 +1,601 @@
+{
+  "schemaVersion": 1,
+  "policy": "independent-versioning; never overwrite installed modules or enable them during core upgrades",
+  "modules": [
+    {
+      "manifest": "examples/skills/bangumi-lookup/skill.json",
+      "id": "bangumi-lookup",
+      "version": "1.1.0",
+      "distribution": "installable-example",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "examples/skills/comfy-draw/skill.json",
+      "id": "comfy-draw",
+      "version": "2.0.0",
+      "distribution": "installable-example",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "examples/skills/steam-deals/skill.json",
+      "id": "steam-deals",
+      "version": "1.5.0",
+      "distribution": "installable-example",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "examples/skills/verify-first/skill.json",
+      "id": "verify-first",
+      "version": "1.0.1",
+      "distribution": "installable-example",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "examples/skills/whale-memes/skill.json",
+      "id": "whale-memes",
+      "version": "1.0.1",
+      "distribution": "installable-example",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/account-pool/plugin.json",
+      "id": "account-pool",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/affinity/plugin.json",
+      "id": "affinity",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/ban-state/plugin.json",
+      "id": "ban-state",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/body-state/plugin.json",
+      "id": "body-state",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/browse-lock/plugin.json",
+      "id": "browse-lock",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/conversation-memory/plugin.json",
+      "id": "conversation-memory",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/image-compat/plugin.json",
+      "id": "image-compat",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/instance-lock/plugin.json",
+      "id": "instance-lock",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/kb-growth/plugin.json",
+      "id": "kb-growth",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/media-download/plugin.json",
+      "id": "media-download",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/meme-engine/plugin.json",
+      "id": "meme-engine",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/memory-growth/plugin.json",
+      "id": "memory-growth",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/mood-tune/plugin.json",
+      "id": "mood-tune",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/owner-identity/plugin.json",
+      "id": "owner-identity",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/proactive-chat/plugin.json",
+      "id": "proactive-chat",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/red-packet-radar/plugin.json",
+      "id": "red-packet-radar",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/reply-safety/plugin.json",
+      "id": "reply-safety",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/search-aggregator/plugin.json",
+      "id": "search-aggregator",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/search-aggregator/search-aggregator/plugin.json",
+      "id": "search-aggregator",
+      "version": "1.1.0",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/speaker-identity/plugin.json",
+      "id": "speaker-identity",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/speech-to-text/plugin.json",
+      "id": "speech-to-text",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/thinking-adapters/plugin.json",
+      "id": "thinking-adapters",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/threads/plugin.json",
+      "id": "threads",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/video-frames/plugin.json",
+      "id": "video-frames",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/wake-policy/plugin.json",
+      "id": "wake-policy",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/主动找聊/plugin.json",
+      "id": "proactiveChat",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/复读拦截/plugin.json",
+      "id": "echo-guard",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/定时文案推送/plugin.json",
+      "id": "scheduled-announcer",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/本体情绪/plugin.json",
+      "id": "bot-emotion",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "plugins/角色卡工具同步/plugin.json",
+      "id": "role-tool-sync",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "plugins/远程价格表/plugin.json",
+      "id": "price-feed",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/AI额度情报/skill.json",
+      "id": "api-deals",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/B站视频解析/skill.json",
+      "id": "bili-info",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/affinity/skill.json",
+      "id": "affinity-snapshot",
+      "version": "0.1.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/ask-admin-skill/skill.json",
+      "id": "ask-admin-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/calculator/skill.json",
+      "id": "calculator",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/chatgpt2api-image/skill.json",
+      "id": "chatgpt2api-image",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/chatgpt2api-search/skill.json",
+      "id": "chatgpt2api-search",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/check-in/skill.json",
+      "id": "check-in",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/conv-memory-skill/conv-memory-skill/skill.json",
+      "id": "conv-memory-skill",
+      "version": "1.0.1",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/conv-memory-skill/skill.json",
+      "id": "conv-memory-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/emotion-skill/skill.json",
+      "id": "emotion-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/feeling-skill/skill.json",
+      "id": "feeling-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/forward-skill/skill.json",
+      "id": "forward-skill",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/help-board/skill.json",
+      "id": "help-board",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/image-gen-skill/image-gen-skill/skill.json",
+      "id": "image-gen-skill",
+      "version": "1.1.0",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/image-gen-skill/skill.json",
+      "id": "image-gen-skill",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/image-generate/skill.json",
+      "id": "image-generate",
+      "version": "1.3.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/keyword-reply/skill.json",
+      "id": "keyword-reply",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/knowledge-memes/skill.json",
+      "id": "knowledge-memes",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/knowledge-verify/skill.json",
+      "id": "knowledge-verify",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/meme-lib/meme-lib/skill.json",
+      "id": "meme-lib",
+      "version": "1.0.1",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/meme-lib/skill.json",
+      "id": "meme-lib",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/memory-growth-skill/skill.json",
+      "id": "memory-growth-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/memory-recall/skill.json",
+      "id": "memory-recall",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/mood-skill/mood-skill/skill.json",
+      "id": "mood-skill",
+      "version": "1.0.1",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/mood-skill/skill.json",
+      "id": "mood-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/music-skill/skill.json",
+      "id": "music-skill",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/random-image/skill.json",
+      "id": "random-image",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/reverse-image-pro/reverse-image-pro/skill.json",
+      "id": "reverse-image-pro",
+      "version": "1.0.1",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/reverse-image-pro/skill.json",
+      "id": "reverse-image-pro",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/reverse-image/skill.json",
+      "id": "reverse-image",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/schedule/skill.json",
+      "id": "schedule",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/search-aggregator-skill/search-aggregator-skill/skill.json",
+      "id": "search-aggregator-skill",
+      "version": "1.1.0",
+      "distribution": "nested-package-copy",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/search-aggregator-skill/skill.json",
+      "id": "search-aggregator-skill",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/sticker-annotate-plus/skill.json",
+      "id": "sticker-annotate-plus",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/sticker-annotate/skill.json",
+      "id": "sticker-annotate",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/text-tools/skill.json",
+      "id": "text-tools",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/threads-skill/skill.json",
+      "id": "threads-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/timed-message/skill.json",
+      "id": "timed-message",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/todo-skill/skill.json",
+      "id": "todo-skill",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/voice-tts-skill/skill.json",
+      "id": "voice-tts-skill",
+      "version": "1.1.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/weather-alert/skill.json",
+      "id": "weather-alert",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/weather-query/skill.json",
+      "id": "weather-query",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/合并转发发送/skill.json",
+      "id": "send-forward",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/百科查询/skill.json",
+      "id": "wiki-search",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/群友印象/skill.json",
+      "id": "people-memory",
+      "version": "1.0.1",
+      "distribution": "bundled",
+      "maintenance": "downstream-maintained"
+    },
+    {
+      "manifest": "skills/自定义图库/skill.json",
+      "id": "image-lib",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/自我印象/skill.json",
+      "id": "self-impressions",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    },
+    {
+      "manifest": "skills/记忆管理/skill.json",
+      "id": "memory-admin",
+      "version": "1.0.0",
+      "distribution": "bundled",
+      "maintenance": "legacy-carried-forward"
+    }
+  ]
+}

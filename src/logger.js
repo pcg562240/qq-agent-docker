@@ -35,6 +35,11 @@ class Logger {
     this.listeners = new Set();       // onLog 监听（SSE 推送）
     this.mirrorConsole = true;        // 是否同时走 console
     this.writing = false;             // 重入标记：监听器若再打日志，直接丢弃（防递归爆炸）
+    this.pendingDisk = '';
+    this.flushTimer = null;
+    this.flushInFlight = false;
+    this.flushAgain = false;
+    this.diskBatchBytes = 0;
   }
 
   setLevel(level) {
@@ -96,17 +101,49 @@ class Logger {
       else console.log(line);
     }
 
-    // 落盘（达到最低级别才写）
+    // 落盘（达到最低级别才写）。先进入小批量缓冲，避免高频日志逐条同步 I/O
+    // 阻塞事件循环；定时器使用 unref，退出时无需等待刷新。
     if (lv >= this.level) {
-      try {
-        fs.mkdirSync(logsDir(), { recursive: true });
-        const time = new Date(entry.ts).toLocaleTimeString('zh-CN', { hour12: false });
-        const line = `${time} [${level.toUpperCase().padEnd(5)}] [${entry.module}] ${text}\n`;
-        // 单条上限：异常对象/大 payload 序列化后可能上 MB，截断保护磁盘
-        const capped = line.length > 64 * 1024 ? line.slice(0, 64 * 1024) + '…（过长已截断）\n' : line;
-        fs.appendFileSync(todayFile(), capped, 'utf8');
-      } catch { /* 写盘失败不影响运行 */ }
+      const time = new Date(entry.ts).toLocaleTimeString('zh-CN', { hour12: false });
+      const line = `${time} [${level.toUpperCase().padEnd(5)}] [${entry.module}] ${text}\n`;
+      const capped = line.length > 64 * 1024 ? line.slice(0, 64 * 1024) + '…（过长已截断）\n' : line;
+      this.pendingDisk += capped;
+      this.diskBatchBytes += capped.length;
+      if (this.diskBatchBytes >= 64 * 1024) this.#scheduleFlush(0);
+      else this.#scheduleFlush(100);
     }
+  }
+
+  #scheduleFlush(delay = 100) {
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.#flushDisk();
+    }, delay);
+    this.flushTimer.unref?.();
+  }
+
+  #flushDisk() {
+    if (this.flushInFlight) { this.flushAgain = true; return; }
+    if (!this.pendingDisk) return;
+    const payload = this.pendingDisk;
+    this.pendingDisk = '';
+    this.diskBatchBytes = 0;
+    this.flushInFlight = true;
+    try {
+      fs.mkdirSync(logsDir(), { recursive: true });
+      fs.appendFileSync(todayFile(), payload, 'utf8');
+    } catch { /* 写盘失败不影响运行 */ }
+    this.flushInFlight = false;
+    if (this.flushAgain || this.pendingDisk) {
+      this.flushAgain = false;
+      this.#scheduleFlush(100);
+    }
+  }
+
+  flush() {
+    if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
+    this.#flushDisk();
   }
 
   debug(module, ...args) { this.#write('debug', module, args); }

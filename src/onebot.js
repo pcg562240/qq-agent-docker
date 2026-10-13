@@ -413,10 +413,13 @@ export function forwardIdFromData(d) {
  * 把 OneBot 消息段数组转成 AI 可读的纯文本。
  * resolveReply: async (mid) => { sender, text } | null —— 解析引用原文。
  * resolveAtName: async (qq) => string | null —— 把 @ 的 QQ 号解析成群名片。
+ * onAt: ({ qq, text }) => void —— @ 段收集器（2026-09-26）：文本包含匹配无法
+ *   区分"同名不同人"，档位判定必须拿 @ 段里的 QQ 号说话；text 是渲染进正文的
+ *   原片段（可能带 speaker-identity 的 (QQ:xxx) 后缀），关键词判定据此剔除。
  * onebot: OneBot 客户端，仅语音转写需要（`media.transcribe` 取语音文件用）；
  *         不传则语音保持 `[语音]` 占位。
  */
-export async function segmentsToText(segments, { resolveReply = null, resolveAtName = null, includeReply = true, onebot = null } = {}) {
+export async function segmentsToText(segments, { resolveReply = null, resolveAtName = null, includeReply = true, onebot = null, onAt = null } = {}) {
   if (typeof segments === 'string') return sanitizeUserText(segments.trim());
   const out = [];
   for (const seg of segments ?? []) {
@@ -426,6 +429,7 @@ export async function segmentsToText(segments, { resolveReply = null, resolveAtN
       case 'at': {
         if (d.qq === 'all') {
           out.push('@全体成员');
+          try { onAt?.({ qq: 'all', text: '@全体成员' }); } catch { /* 收集器不阻断渲染 */ }
         } else {
           let name = null;
           try { name = resolveAtName ? await resolveAtName(String(d.qq)) : null; } catch { name = null; }
@@ -433,7 +437,9 @@ export async function segmentsToText(segments, { resolveReply = null, resolveAtN
           // 正文 @ 规范化走 `message.inline-at-normalize` 能力（speaker-identity Skill 提供）：
           // 把 @昵称 补成 @昵称(QQ:xxx)，让模型能区分"同名不同人"。
           // 这里天然同时握有 QQ 号与解析出的名字，是最合适的接入点。
-          out.push(normalizeInlineAt(base, String(d.qq), name) ?? base);
+          const rendered = normalizeInlineAt(base, String(d.qq), name) ?? base;
+          out.push(rendered);
+          try { onAt?.({ qq: String(d.qq), text: rendered }); } catch { /* 收集器不阻断渲染 */ }
         }
         break;
       }

@@ -1,3 +1,4 @@
+import { memberId } from '../../src/extension-context.js';
 // conv-memory-skill —— LLM 型技能：长期印象增查删（宿主 tools.js.orig 375~430 行三工具照搬）
 // （原拟命名 conversation-memory-skill，因 skillId 前缀截断后工具 id 将超 64 字符，改短名）
 //
@@ -22,7 +23,7 @@ export function setup(api) {
       type: 'object',
       properties: {
         category: { type: 'string', enum: ['memberImpression'], description: '固定为 memberImpression' },
-        userId: { type: ['integer', 'string'], description: '对方 QQ 号（数字）' },
+        userId: { type: ['integer', 'string'], description: '对方完整 QQ 号或官方 OpenID 字符串' },
         target: { type: 'string', description: '对方名字（备注名/群名片/昵称），用于展示' },
         content: { type: 'string', description: '印象内容（≤120 字，稳定、可跨多次聊天使用）' },
       },
@@ -32,10 +33,11 @@ export function setup(api) {
       try {
         if (!ctx.memory?.append) return err('记忆服务不可用（ctx.memory 缺失，V0.3.1 核心未提供）。');
         const userId = String(args.userId ?? '').trim();
-        if (!/^\d{1,15}$/.test(userId)) {
-          return err('userId 必须是数字 QQ 号（收到：' + JSON.stringify(args.userId) + '）。先查准确 QQ 号再记。');
+        if (!memberId(userId)) {
+          return err('userId 必须是完整 QQ 号或官方 OpenID（收到：' + JSON.stringify(args.userId) + '）。先查准确 QQ 号再记。');
         }
         const content = String(args.content ?? '').trim();
+        if (!content) return err('印象内容不能为空');
         if (content.length > 120) return err('印象太长了（>120 字），只记稳定的短句。');
         const entry = ctx.memory.append(ctx.chatKey, 'memberImpression', content, {
           userId,

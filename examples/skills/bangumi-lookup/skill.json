@@ -1,0 +1,64 @@
+{
+  "id": "bangumi-lookup",
+  "name": "番剧资料查询（Bangumi）",
+  "version": "1.1.0",
+  "apiVersion": 1,
+  "category": "knowledge",
+  "entry": "index.js",
+  "author": "本地自建",
+  "enabledByDefault": true,
+  "permissions": [
+    "web_fetch"
+  ],
+  "description": "让机器人查得到番剧/动漫的真实资料：评分排名、放送日期、集数与更新进度、简介、制作阵容、角色与声优。\n\n【为什么需要它】模型的训练知识有截止时间，而番剧是**最讲究时效**的一类内容 —— 新番每季都换、评分天天在动、更新进度按周推进。硬答出来的「这部番 2023 年播出、评分 8.2」很可能整句都是编的，比说不知道糟糕得多。这个技能让机器人**先查再说**。\n\n【数据来源】Bangumi（bgm.tv）公开 API，**不需要任何 Key**。官方 api.bgm.tv 挂在 Cloudflare、大陆直连基本超时，所以默认走社区镜像 bangumi.vip（接口和封面图都通）；某个源连不上会自动换下一个，全程无需干预。查询在本地发起，结果只回给模型组织语言。\n\n【四个工具】搜作品/角色/人物 ／ 查详情（含制作阵容与声优） ／ 查剧集与更新进度 ／ 今日·本周放送表\n\n【边界】只读、只查、不改数据；不查 R18 内容（默认过滤，可在设置里关）。",
+  "settings": {
+    "apiBase": "",
+    "defaultLimit": 5,
+    "allowNsfw": false,
+    "timeoutMs": 12000,
+    "requestIntervalMs": 600,
+    "userAgent": ""
+  },
+  "configSchema": {
+    "apiBase": {
+      "type": "string",
+      "label": "接口域名（留空=自动）",
+      "description": "留空即可：自动先试镜像 api.bangumi.vip，不通再试官方 api.bgm.tv，哪个通用哪个并记住。**填了就只用填的这个、不再自动兜底** —— 适合自己搭了反代的情况。镜像域名会换（如 bangumi.pro → bangumi.vip），失效时把这里清空即可恢复自动。"
+    },
+    "defaultLimit": {
+      "type": "number",
+      "label": "每次最多返回几条",
+      "description": "1~10，默认 5。给多了模型容易把不相关的作品也念出来，还费 token。"
+    },
+    "allowNsfw": {
+      "type": "boolean",
+      "label": "允许查询 R18 条目",
+      "description": "默认**关**。关掉时搜索会带 nsfw=false 过滤，R18 作品不会出现在结果里。打开后搜索结果可能包含成人向条目 —— 注意这**不代表**机器人可以在群里聊这些内容。"
+    },
+    "timeoutMs": {
+      "type": "number",
+      "label": "单次请求超时（毫秒）",
+      "description": "默认 12000。Bangumi 偶发慢响应，给太少会频繁超时、表现为「查不到」。"
+    },
+    "requestIntervalMs": {
+      "type": "number",
+      "label": "请求最小间隔（毫秒）",
+      "description": "默认 600。Bangumi 官方建议 0.5 秒一次，本技能所有请求走同一条串行队列。被限流（HTTP 429）时可以调大到 1200。"
+    },
+    "userAgent": {
+      "type": "string",
+      "label": "User-Agent（留空用内置值）",
+      "description": "留空即可。Bangumi **强制**要求规范的 User-Agent，格式为「开发者/应用名/版本 (项目地址)」；默认库的 UA 会被直接拦掉。只有在内置值也被拦（表现为 403）时才需要改这里。"
+    }
+  },
+  "prompt": {
+    "sections": [
+      {
+        "id": "bangumi-lookup-rule",
+        "title": "番剧资料（Bangumi）",
+        "priority": 58,
+        "content": "【番剧/动漫资料：先查再说，别凭印象报数字】\n1) 群友问到**具体的番剧、动画、漫画、轻小说、游戏、声优、角色**时，先查工具再开口：\n   · 问到片名/想找某部番 → `bangumi-lookup__search`（kind=subject）\n   · 问到角色或声优是谁 → `bangumi-lookup__search`（kind=character / person）\n   · 想讲剧情、制作公司、评分、放送日期 → 先 search 拿 **id**，再 `bangumi-lookup__detail`\n   · 问「更新到第几集了」「这周更没更」「什么时候完结」 → `bangumi-lookup__episodes`\n   · 问「今天有什么番更新」「这季有什么新番」 → `bangumi-lookup__calendar`\n2) **数字一律照抄工具返回的**：评分、排名、集数、放送日期不许你自己估算、四舍五入或「大概 8 分左右」。工具没给的数字就不要说。\n3) **id 只能来自 search**，绝不要自己编一个 id 去查详情 —— 那会查到完全不相干的作品，而且你还会照着它一本正经地讲。\n4) 搜索结果里已经有片名、日期、评分、集数时，**直接回答就行，不要再调一次详情** —— 多一次调用多一次延迟、多一点成本。\n5) 工具查不到 → 用 `web_search` 兜底（关键词「作品名 动画 评分」这类）；还是查不到就**如实说不确定**，不要编。若工具报「接口一个都连不上」，那是网络/镜像的问题，**顺口跟用户提一句**（让他看看「番剧资料查询」设置里的「接口域名」），再走 web_search 兜底。\n6) 结果用**你自己的话**讲给群里：挑群友问的那一两个点说，别把工具返回的字段名、id、链接整段念出来（群里没人想看 API 原文）。一两句话讲清楚，别念百科。\n7) 想发封面图可以用 `send_image`（**必须先 preview=true 看一眼**再发），一次最多一张；不发也完全可以。\n8) 只读不写：这个技能只能查，改不了数据，也不要用它去查收藏/进度。\n9) R18、成人向内容不适用上面这套：**不要查、不要接、不要解释**，按「擦边内容拦截」处理。"
+      }
+    ]
+  }
+}

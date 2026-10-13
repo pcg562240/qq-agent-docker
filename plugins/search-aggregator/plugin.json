@@ -1,10 +1,10 @@
 {
   "id": "search-aggregator",
   "name": "多引擎搜索聚合",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": 1,
   "category": "utility",
-  "description": "多引擎 / 多来源搜索聚合层（宿主 search-aggregator.js 语义照搬）：并行打 bing/so360/baiduWeb/sogou 四个免 key 引擎 → URL 去重 → RRF 融合排序 → 共识加权 → 域多样性截断。某引擎抽风不影响整体；聚合结果为空自动退回单引擎。被生图/知识库联网兜底软依赖调用。",
+  "description": "聚合搜索的底层插件：并行查询配置的网页引擎，规范化链接去重、排名融合、限制同站点结果。可选 ChatGPT（复用已启用的 ChatGPT 联网搜索技能），支持并行或普通引擎无结果时备用；失败状态如实返回，不自动重试。",
   "enabledByDefault": false,
   "capabilities": [
     "search.aggregate"
@@ -16,15 +16,60 @@
     "maxResults": 8,
     "maxPerDomain": 3,
     "consensusBoost": 0.25,
-    "rrfK": 60
+    "rrfK": 60,
+    "chatgptMode": "parallel",
+    "chatgptTimeoutMs": 120000
   },
   "configSchema": {
-    "engines": { "type": "string", "label": "引擎（逗号分隔）", "description": "默认 bing,so360,baiduWeb,sogou（全部免 key，开箱即用）。" },
-    "timeoutMs": { "type": "number", "label": "单引擎超时 (ms)", "description": "默认 8000。某引擎超时只丢它，不影响其他。" },
-    "maxResults": { "type": "number", "label": "最多返回条数", "description": "默认 8。" },
-    "maxPerDomain": { "type": "number", "label": "同站点最多条数", "description": "默认 3，避免一个站霸榜（域多样性）。" },
-    "consensusBoost": { "type": "number", "label": "共识加权系数", "description": "默认 0.25。同一 URL 被 N 个引擎返回 → 分数乘 (1+boost*(N-1))。" },
-    "rrfK": { "type": "number", "label": "RRF 常数 k", "description": "默认 60。倒数排名融合常数。" }
+    "engines": {
+      "type": "string",
+      "label": "引擎（逗号分隔）",
+      "description": "可填 bing,so360,baiduWeb,sogou,chatgpt2api。默认仅前四个；填 chatgpt2api 可只用 GPT。GPT 需先配置并启用「ChatGPT 联网搜索」技能，复用其 Key，不借用主模型凭据。网页引擎可能受页面变化或验证限制。"
+    },
+    "timeoutMs": {
+      "type": "number",
+      "label": "单引擎超时 (ms)",
+      "description": "默认 8000。某引擎超时只丢它，不影响其他。"
+    },
+    "maxResults": {
+      "type": "number",
+      "label": "最多返回条数",
+      "description": "默认 8。"
+    },
+    "maxPerDomain": {
+      "type": "number",
+      "label": "同站点最多条数",
+      "description": "默认 3，避免一个站霸榜（域多样性）。"
+    },
+    "consensusBoost": {
+      "type": "number",
+      "label": "共识加权系数",
+      "description": "默认 0.25。同一 URL 被 N 个引擎返回 → 分数乘 (1+boost*(N-1))。"
+    },
+    "rrfK": {
+      "type": "number",
+      "label": "RRF 常数 k",
+      "description": "默认 60。倒数排名融合常数。"
+    },
+    "chatgptMode": {
+      "type": "enum",
+      "label": "ChatGPT 参与方式",
+      "description": "parallel=并行；fallback=普通引擎无有效链接时备用。仅在引擎列表包含 chatgpt2api 时生效；每轮最多一次 GPT 搜索，会消耗服务额度。仅选 GPT 时均直接搜索。",
+      "values": [
+        "parallel",
+        "fallback"
+      ]
+    },
+    "chatgptTimeoutMs": {
+      "type": "number",
+      "label": "ChatGPT 搜索超时 (ms)",
+      "min": 1000,
+      "max": 600000,
+      "description": "默认 120000，独立于网页引擎的 8000ms。超时停止本地等待，不重试；已提交的远端任务可能继续消耗额度。"
+    }
   },
-  "prompt": null
+  "prompt": null,
+  "permissions": [
+    "web_fetch"
+  ]
 }

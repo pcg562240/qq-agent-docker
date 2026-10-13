@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { QQBot, FileKVStore, kvSessionPersistence } from '@tencent-connect/qqbot-nodejs';
+import { QQBot, ApiError, FileKVStore, kvSessionPersistence } from '@tencent-connect/qqbot-nodejs';
 import { safeFetchBinary } from './safe-fetch.js';
 import { qqAttachmentSegments, qqMessageQuote, enrichQQQuote } from './qqbot-quotes.js';
+import { QQIngressJournal, INGRESS_REASONS } from './qqbot-ingress.js';
+import { QQTextSendDiagnostics } from './qqbot-send-diagnostics.js';
 
 const ID = /^[A-Za-z0-9_-]{1,256}$/;
 const MAX_IMAGE = 20 * 1024 * 1024;
@@ -72,10 +74,13 @@ export class QQBotClient {
     this.statusListeners = new Set(); this.selfInfo = null;
     this.directory = path.join(dataDir, 'qqbot');
     this.peers = new Map(read(path.join(this.directory, 'peers.json'), []));
+    this.ingress = new QQIngressJournal(this.directory);
     this.seen = new Map(read(path.join(this.directory, 'seen.json'), []));
     this.messages = new Map(); this.anchors = new Map(); this.referenceIndex = new Map();
     this.replyContexts = new AsyncLocalStorage();
     this.replyRoutes = new WeakSet();
+    this.textSendDiagnostics = new QQTextSendDiagnostics();
+    this.mentionMarkdownDisabled = new Set(); // Explicit platform rejection, per group, until restart.
     this.generation = 0; this.queue = Promise.resolve(); this.closed = true;
     this.supports = { text: true, image: true, groupAt: true, groupAll: true,
       voice: false, video: false, file: false, poke: false, forward: false };
@@ -88,6 +93,9 @@ export class QQBotClient {
     return { type: this.kind, configured: Boolean(cfg.appId && cfg.clientSecret),
       enabled: cfg.enabled !== false, connected: this.connected, everConnected: this.everConnected,
       error: this.lastConnectError, appId: String(cfg.appId || ''), capabilities: this.supports,
+      groupReplyMentionMode: ['markdown', 'legacy'].includes(cfg.groupReplyMentionMode) ? cfg.groupReplyMentionMode : 'off',
+      mentionMarkdownFallbackGroups: this.mentionMarkdownDisabled.size,
+      recentTextSends: this.textSendDiagnostics.list(),
       hint: /接口访问源IP不在白名单|40023002|11298/i.test(this.lastConnectError)
         ? '腾讯对当前凭据返回了源 IP 白名单错误。龙虾机器人请先用下方 QQ 扫码授权核对绑定；不要直接套用传统开发者机器人的审批流程。若该应用确实启用了 IP 白名单，再核对 QQ 接口实际使用的公网出口 IP（不是局域网 IP 或聊天白名单）。' : '',
       peers: [...this.peers.values()] };
@@ -140,7 +148,8 @@ export class QQBotClient {
         store: new FileKVStore({ dir: this.directory, fileName: 'session.json' }),
         accountId: String(cfg.appId),
       }),
-      logger: { debug() {}, info: v => {
+      logger: { debug: v => this.textSendDiagnostics.observe('debug', v), info: v => {
+        this.textSendDiagnostics.observe('info', v);
         if (current() && String(v).includes('WebSocket closed:')) this.setStatus(false, '连接中断，SDK 正在重连');
       }, warn: v => {
         if (current()) this.log('[qqbot]', this.redact(v));
@@ -179,12 +188,16 @@ export class QQBotClient {
   }
   async receive(msg) {
     const event = normalizeQQMessage(msg, { appId: this.getOptions().appId, selfId: this.selfId });
-    if (!event || !event.message_id || msg.senderIsBot) return;
+    if (!event || !event.message_id) return;
     const kind = event.message_type;
     const id = kind === 'group' ? event.group_id : event.user_id;
     const key = `${kind}:${id}`;
     const dedup = `${key}:${event.message_id}`;
-    if (this.seen.has(dedup)) return;
+    const diagnostic = reason => this.ingress.record({ kind, id, messageId: event.message_id,
+      eventType: /^[A-Z_]{1,64}$/.test(msg.rawEventType || '') ? msg.rawEventType : 'UNKNOWN',
+      atMe: event.officialAtMe, messageAt: event.time * 1000, receivedAt: this.now(), reason });
+    if (msg.senderIsBot) { diagnostic('bot_message'); return; }
+    if (this.seen.has(dedup)) { diagnostic('duplicate'); return; }
     // Persist only routing diagnostics, never bodies or sender identities from
     // non-allowlisted group messages. "forwarded" is not a promise of a reply.
     const peer = { key, kind, id, name: kind === 'private' ? event.sender.nickname : id,
@@ -193,6 +206,7 @@ export class QQBotClient {
     const record = reason => {
       peer.lastIngress = reason; boundedSet(this.peers, key, peer);
       write(path.join(this.directory, 'peers.json'), [...this.peers]);
+      if (reason !== 'processing') diagnostic(reason);
     };
     if (!this.allow(kind, id)) { record('not_allowed'); return; }
     if (kind === 'group' && this.getOptions().requireMention !== false && !event.officialAtMe) { record('not_mentioned'); return; }
@@ -208,7 +222,10 @@ export class QQBotClient {
     boundedSet(this.messages, event.message_id, { ...event, key, receivedAt: this.now() });
     if (msg.msgIdx) boundedSet(this.referenceIndex, `${key}\0${msg.msgIdx}`, event.message_id);
     boundedSet(this.anchors, key, { msgId: event.message_id, at: this.now() });
-    try { await this.onEvent(event); record('forwarded'); }
+    try {
+      const result = await this.onEvent(event);
+      record(INGRESS_REASONS.has(result?.ingress) ? result.ingress : 'forwarded');
+    }
     catch (error) { record('error'); throw error; }
     boundedSet(this.seen, dedup, this.now());
     write(path.join(this.directory, 'seen.json'), [...this.seen]);
@@ -279,7 +296,11 @@ export class QQBotClient {
         anchor = { ...latest, userId: this.messages.get(latest.msgId)?.user_id || '' };
       }
     }
-    const route = Object.freeze({ chatKey, msgId: anchor?.msgId || null, userId: anchor?.userId || null, at: anchor?.at });
+    // Only a real run trigger or an explicit target requests a visible @.
+    // An unscoped send may borrow passive quota, but must not silently ping
+    // the last speaker (scheduled/proactive/cross-chat sends).
+    const mentionUser = Boolean(anchor && ((scoped && context.entries.length) || ref || atUserId));
+    const route = Object.freeze({ chatKey, msgId: anchor?.msgId || null, userId: anchor?.userId || null, at: anchor?.at, mentionUser });
     this.replyRoutes.add(route);
     return route;
   }
@@ -297,18 +318,84 @@ export class QQBotClient {
     return { scope: kind === 'private' ? 'c2c' : 'group', targetId: id,
       ...(route.msgId ? { msgId: route.msgId } : {}) };
   }
+  // Keep transport markup out of splitting/dedupe/history. Strip only an
+  // exact match for the already pinned recipient, never choose a route from
+  // model text. Only the opt-in Markdown path adds a transport tag at send time.
+  normalizeOutgoingText(kind, id, text, options = {}) {
+    let content = String(text);
+    if (kind !== 'group') return content;
+    const leadingAt = /^\s*(?:<@!?([A-Za-z0-9_-]{1,256})>|<qqbot-at-user\s+id=["']([A-Za-z0-9_-]{1,256})["']\s*\/>)\s*/;
+    if (!leadingAt.test(content)) return content;
+    const route = this.captureReplyRoute(kind, id, options);
+    let match;
+    while ((match = content.match(leadingAt))) {
+      if (!route.msgId || !route.userId || (match[1] || match[2]) !== route.userId) {
+        throw new Error('正文中的 @ 标记与已绑定回复目标不一致或没有回复目标；请移除 <@...>，用 replyToMessageId 指定原提问，正文只写回复内容');
+      }
+      content = content.slice(match[0].length);
+    }
+    if (!content.trim()) throw new Error('消息内容为空：请在去掉正文 @ 标记后填写回复内容');
+    return content;
+  }
   async sendText(kind, id, text, options = {}) {
     options = this.normalizeReplyOptions(kind, id, options);
-    const { replyToMessageId, atUserId } = options;
+    if (this.getOptions().groupReplyMentionMode === 'legacy') {
+      // Preserve historical SDK helpers, but not their manual <@ID> injection:
+      // confirmed plain-text leakage recurred after the requested rollback.
+      // atUserId still selects/validates the frozen recipient; msg_id and the
+      // explicit quote remain intact. Never replace this with a fake nickname @.
+      options = { ...options, replyRoute: this.captureReplyRoute(kind, id, options) };
+      const { replyToMessageId } = options;
+      const target = this.target(kind, id, options);
+      const content = this.normalizeOutgoingText(kind, id, text, options);
+      let result;
+      if (replyToMessageId != null && String(replyToMessageId)) {
+        const ref = this.messages.get(String(replyToMessageId));
+        if (!ref || ref.key !== `${kind}:${id}`) throw new Error('引用消息不属于当前会话或已不在缓存中');
+        result = await this.textSendDiagnostics.run(target, () => this.bot.send({ target, content,
+          messageReference: { message_id: String(replyToMessageId) } }));
+      } else result = await this.textSendDiagnostics.run(target, () => this.bot.sendText(target, content));
+      return { message_id: result?.id ?? null };
+    }
+    options = { ...options, replyRoute: this.captureReplyRoute(kind, id, options) };
+    const { replyToMessageId } = options;
     const target = this.target(kind, id, options);
-    let content = String(text);
-    if (atUserId && kind === 'group') content = `<@${entity(atUserId)}> ${content}`;
-    let result;
+    const content = this.normalizeOutgoingText(kind, id, text, options);
+    let messageReference;
     if (replyToMessageId != null && String(replyToMessageId)) {
       const ref = this.messages.get(String(replyToMessageId));
       if (!ref || ref.key !== `${kind}:${id}`) throw new Error('引用消息不属于当前会话或已不在缓存中');
-      result = await this.bot.send({ target, content, messageReference: { message_id: String(replyToMessageId) } });
-    } else result = await this.bot.sendText(target, content);
+      messageReference = { message_id: String(replyToMessageId) };
+    }
+    // Production feedback: group msg_type=0 renders qqbot-at-user literally.
+    // Never put native mention markup in a plain-text body. Markdown is opt-in
+    // and per group reply, independent of the global/private markdown setting.
+    const mention = kind === 'group' && options.replyRoute.mentionUser && options.mentionReply !== false;
+    const wantsMarkdown = mention && this.getOptions().groupReplyMentionMode === 'markdown';
+    let result;
+    if (wantsMarkdown && !this.mentionMarkdownDisabled.has(String(id))) {
+      // Treat model-written interaction tags as literal text, not extra @s.
+      const body = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      try {
+        result = await this.textSendDiagnostics.run(target, () => this.bot.send({ target, msgType: 2, messageReference,
+          markdown: { content: `<qqbot-at-user id="${entity(options.replyRoute.userId)}" /> ${body}` } }));
+        return { message_id: result?.id ?? null };
+      } catch (error) {
+        // Retry only after a definitive rejection, never after a timeout or an
+        // ambiguous network/5xx result that might already have been delivered.
+        if (!(error instanceof ApiError) || error.path !== `/v2/groups/${target.targetId}/messages`
+          || error.httpStatus < 400 || error.httpStatus >= 500
+          || ![304036, 40034127, 40034106].includes(Number(error.bizCode))) throw error;
+        this.mentionMarkdownDisabled.add(String(id));
+        this.log('[qqbot] 群回复 Markdown/@ 被平台明确拒绝，改发无标签纯文本；本次进程不再向该群尝试。错误码：', error.bizCode);
+      }
+    }
+    if (kind === 'group' || messageReference) {
+      // Explicit type=0 also prevents global SDK Markdown settings from undoing
+      // a clean fallback. Keep the same frozen msg_id and optional quote.
+      result = await this.textSendDiagnostics.run(target, () =>
+        this.bot.send({ target, msgType: 0, content, ...(messageReference ? { messageReference } : {}) }));
+    } else result = await this.textSendDiagnostics.run(target, () => this.bot.sendText(target, content));
     return { message_id: result?.id ?? null };
   }
   async imageSource(ref) {

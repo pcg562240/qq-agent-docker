@@ -11,6 +11,7 @@ const TICK_MS = 3600 * 1000;
 let cfg = () => ({});
 let log = () => {};
 let timer = null;
+let generation = 0;
 
 const status = {
   url: '',
@@ -88,6 +89,7 @@ function saveCache(url, prices) {
 }
 
 async function fetchOnce(url) {
+  const epoch = generation;
   status.fetchedAt = Date.now();
   try {
     const res = await fetch(url, {
@@ -98,6 +100,7 @@ async function fetchOnce(url) {
     const data = await res.json();
     const norm = normalizePriceFeed(data);
     if (!norm) throw new Error('载荷无法解析成价格表');
+    if (epoch !== generation || cfg().enabled === false) return;
     applyPrices(norm.prices, 'remote');
     status.dropped = norm.dropped;
     status.ok = true;
@@ -137,6 +140,7 @@ export function setup(a) {
 }
 
 export function activate() {
+  generation++;
   if (timer) return;
   const tick = () => {
     timer = setTimeout(tick, TICK_MS);
@@ -147,6 +151,9 @@ export function activate() {
 }
 
 export function deactivate() {
+  generation++;
   if (timer) clearTimeout(timer);
   timer = null;
 }
+
+export const dispose = deactivate;

@@ -9,6 +9,14 @@
 - `compose.yaml`：本地源码构建，继续使用 `qq-agent-docker:local`，不改现有部署。
 - 许可边界见 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)，尤其腾讯扫码依赖的 `UNLICENSED` 标记。发行镜像按发布者选择保留该包，但不将其声称为 MIT 或已获得再分发授权。
 
+## 当前版本口径（2026-10-13）
+
+- 应用 `package.json`、锁文件根版本和历史 Linux 打包脚本默认值统一为 **0.4.0**，与主上游官方 Git 源码一致；不回退已完成的 Docker／官方 QQ 适配和扩展修复。
+- 扩展各自版本、Git 来源提交和 Docker 发行修订仍独立记录。新镜像发行使用新的 `v0.4.0-docker.N` 标签；不要重命名或移动旧 `v0.4.7-docker.1`。
+- 本轮用户请求为 GitHub 源码更新，包含官方上游迁移、已验证的扩展修复和版本对齐；不触发镜像发布或运行容器重启。`compose.release.yaml` 继续固定已经存在的旧镜像，不能把它改成尚未发布的版本。
+- `test/docker-version.test.mjs` 检查应用版本、锁文件、上游元数据及打包默认值一致。
+- 本轮版本变更后，本机和隔离 Linux 的 `test:local` 各 373/373，Linux 平台 35/35，选定官方核心回归通过；索引审计覆盖 629 文件、22 项保护规则。没有向真实 QQ 发送测试消息。
+
 ## 为什么公开历史不同
 
 发布前扫描发现，上游旧提交的 `ci-input/app-code.tar.gz` 含疑似凭据。虽然当前树已删除归档，直接推送原 `main` 仍会带上传统 Git 历史中的对象。因此：
@@ -33,7 +41,7 @@ git push origin public:main
 git push origin refs/tags/v0.4.7-docker.1
 ```
 
-发行标签必须指向公开提交，而不是本地集成 main。`push.default=nothing` 保持开启；本地 `origin` 的默认推送 refspec 只设置为 `public:main`。远程 `upstream-linux` 的 push URL 继续禁用。
+发行标签必须指向公开提交，而不是本地集成 main。`push.default=nothing` 保持开启；本地 `origin` 的默认推送 refspec 只设置为 `public:main`。远程 `upstream-official` 和 `upstream-linux` 的 push URL 均禁用。官方祖先迁移不改变干净快照发布策略，不直接推送新本地 main。
 
 ## 镜像流程与验证
 

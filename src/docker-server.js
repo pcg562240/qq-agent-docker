@@ -1,10 +1,10 @@
 // Docker-specific entrypoint. Never launches a desktop QQ client or changes sysctl.
-import { parseConsoleAllowedHosts } from './console-auth.js';
+import { parseConsoleAllowedHosts, validConsoleToken } from './console-auth.js';
 process.umask(0o077);
 process.env.QQ_AGENT_DOCKER = '1';
 process.env.QQ_AGENT_DATA_DIR ||= '/data';
-if (!/^[A-Za-z0-9_-]{24,256}$/.test(process.env.QQ_AGENT_CONSOLE_TOKEN || '')) {
-  console.error('QQ_AGENT_CONSOLE_TOKEN 应为 24–256 位字母、数字、下划线或连字符；先运行 npm run docker:init。');
+if (!validConsoleToken(process.env.QQ_AGENT_CONSOLE_TOKEN)) {
+  console.error('QQ_AGENT_CONSOLE_TOKEN 应为 8–256 位字母、数字、下划线或连字符；建议使用至少 24 位随机密码，可运行 npm run docker:init 生成。');
   process.exit(1);
 }
 if (!['qqbot', 'onebot'].includes(process.env.QQ_AGENT_CHANNEL || 'qqbot')) {

@@ -1,3 +1,4 @@
+import { skillSettingsPatch } from './skills/settings-patch.js';
 // API 路由表：把 handleHttp 的巨型 if-else 链拆成声明式路由。
 //
 // 每个路由：{ method, pattern, handler }
@@ -17,6 +18,7 @@ import { getConfig, updateConfig, deepMerge as deepMergeConfig, DATA_DIR } from 
 import { resolvePeerTarget } from './peer.js';
 import { PROFILE_ID } from './profile.js';
 import { createConnectionModelRoutes } from './connection-models.js';
+import { INGRESS_LIMIT } from './qqbot-ingress.js';
 import { customSearch } from './web-search.js';
 // 平台抽象层：打开目录/URL 的实际命令（Windows explorer/cmd，Linux xdg-open）
 import * as platform from './platform.js';
@@ -39,6 +41,7 @@ import { getGlobalBlocklist, updateGlobalBlocklist, FIXED_PRICE_FEED_URL } from 
 import { listAccounts, removeAccount, loginAccount, publishModule, verifyInstallCodes, installByCode } from './market.js';
 import { importModules } from './module-import.js';
 import { BUNDLED_DIRS, hasExternalModules, isModuleDir } from './module-paths.js';
+import { bindSkillSecrets, skillModelRoutes } from './skill-models.js';
 
 /**
  * 构建路由表。
@@ -46,7 +49,7 @@ import { BUNDLED_DIRS, hasExternalModules, isModuleDir } from './module-paths.js
  */
 export function createRoutes(deps) {
   const {
-    store, memory, sessions, onebot, orchestrator,
+    store, memory, sessions, onebot, orchestrator, groupNames,
     emit, log,
     // app.js 内部的过程/状态
     localVersion, compareSemver, UPDATE_INFO_URL,
@@ -98,6 +101,7 @@ export function createRoutes(deps) {
 
   return [
     ...createConnectionModelRoutes(readBody),
+    ...skillModelRoutes(skillManager),
     // ── 状态 / 数据目录 / 重置 ─────────────────────────────────────────
     {
       method: 'GET', pattern: '/api/status',
@@ -409,7 +413,7 @@ export function createRoutes(deps) {
         try {
           const list = await onebot.call('get_group_list');
           const groups = (Array.isArray(list) ? list : (list?.data ?? []))
-            .map((g) => ({ id: String(g.group_id), name: String(g.group_name ?? g.group_id) }));
+            .map((g) => ({ id: String(g.group_id), name: groupNames?.describe(String(g.group_id), g.group_name).name || String(g.group_name ?? g.group_id) }));
           return json(res, 200, { groups });
         } catch (error) {
           return json(res, 502, { error: String(error?.message ?? error) });
@@ -1199,21 +1203,12 @@ export function createRoutes(deps) {
 
         // 2) 设置（只允许改 manifest 声明过的键，防止前端塞垃圾字段进配置）
         if (body.settings && typeof body.settings === 'object') {
-          const allowed = new Set([
-            ...Object.keys(skill.manifest.settings || {}),
-            ...Object.keys(skill.manifest.configSchema || {})
-          ]);
           const schema = skill.manifest.configSchema || {};
           const current = getSkillConfig(id, skill.manifest.settings || {});
-          const patch = {};
-          for (const [k, v] of Object.entries(body.settings)) {
-            if (!allowed.has(k)) continue;
-            // 密文字段：收到脱敏占位符或空串 = "不修改"。
-            // 不这么做的话，用户只是打开表单点了保存，Cookie/Key 就被覆盖成 '******'。
-            if (schema[k]?.secret && (v === '******' || String(v ?? '').trim() === '')) continue;
-            patch[k] = v;
-          }
-          if (Object.keys(patch).length) setSkillConfig(id, patch);
+          let patch;
+          try { patch = skillSettingsPatch(body.settings, current, schema, skill.manifest.settings || {}); }
+          catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+          if (Object.keys(patch).length) setSkillConfig(id, bindSkillSecrets(patch, current, schema));
         }
 
         emit('status', { configUpdated: true });
@@ -1495,6 +1490,9 @@ export function createRoutes(deps) {
         }
         if (onebot.kind === 'qqbot' && patch.qqbot?.clientSecret !== undefined) patch.qqbot.authSource = 'manual';
         const next = updateConfig(patch);
+        if (onebot.kind === 'qqbot' && Object.hasOwn(patch.qqbot || {}, 'groupReplyMentionMode')) {
+          orchestrator.refreshToolDefs(); // Mention guidance must switch with the transport, not only after restart.
+        }
         if (onebot.kind === 'qqbot' && patch.qqbot) await onebot.reconnect();
         store.setMaxPerChat(next.store?.maxMessagesPerChat ?? 0);
         sessions?.setKeepFiles?.(next.store?.keepSessionFiles ?? 0);
@@ -1632,8 +1630,23 @@ export function createRoutes(deps) {
               new Promise((r) => setTimeout(() => r(''), 3000))
             ]) || '';
           } catch { c.chatName = ''; }
+          if (groupNames) {
+            const named = groupNames.describe(m[1], c.chatName);
+            c.chatName = named.name; c.groupAlias = named.groupAlias; c.nameSource = named.nameSource;
+          }
         }));
         return json(res, 200, { chats });
+      }
+    },
+
+    {
+      method: 'GET', pattern: '/api/qq/ingress',
+      handler: async ({ res, json, url }) => {
+        const groupId = url.searchParams.get('groupId') || '';
+        if (!/^[A-Za-z0-9_-]{1,256}$/.test(groupId)) return json(res, 400, { error: '群 OpenID 格式不正确' });
+        if (onebot.kind !== 'qqbot') return json(res, 409, { error: '此接收诊断仅适用于官方 QQ 通道' });
+        return json(res, 200, { entries: onebot.ingress.list('group', groupId), capacity: INGRESS_LIMIT,
+          note: '仅保留本机器人最近 500 条通道处理结果，每群最多显示 50 条；不含正文和发送者。没有记录不等于平台没有推送，旧版本记录不会补录。' });
       }
     },
 

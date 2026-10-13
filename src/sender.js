@@ -205,20 +205,23 @@ export class SendQueue {
     if (kind !== 'group' && kind !== 'private') throw new Error(`非法会话 key：${chatKey}`);
     const list = Array.isArray(messages) ? messages : [messages];
     if (!list.length) throw new Error('消息列表为空');
+    options = this.#sendOptions(kind, id, options);
     const hardSplitAt = Number(getConfig().send?.hardSplitAt) || 0;
     const parts = [];
     for (const m of list) {
-      const plain = mdToPlain(String(m ?? ''));
+      let plain = mdToPlain(String(m ?? ''));
       if (!plain) continue;
       // 最后防线：任何上游畸形路径漏下来的 "[object Object]" 到这儿直接拦掉，
       // 用户永远不该在 QQ 里看到这串字符。全被拦 → 下方抛"消息内容为空"回给模型。
       if (/^\[object Object\]$/.test(plain)) continue;
+      // Normalize against the frozen route before splitting/dedupe/history.
+      // Only transports implementing this hook are affected (not OneBot).
+      plain = this.onebot.normalizeOutgoingText?.(kind, id, plain, options) ?? plain;
       if (hardSplitAt > 0 && plain.length > hardSplitAt) parts.push(...splitForQQ(plain, hardSplitAt));
       else parts.push(plain);
     }
     if (!parts.length) throw new Error('消息内容为空');
 
-    options = this.#sendOptions(kind, id, options);
     const dedupeScope = this.#dedupeScope(chatKey, options);
 
     const chain = this.#chain(chatKey);
@@ -238,7 +241,8 @@ export class SendQueue {
         const data = await this.onebot.sendText(kind, id, text, {
           ...options,
           replyToMessageId: i === 0 ? options.replyToMessageId : null, // 引用挂在第一条上：回的就是那条
-          atUserId: i === 0 ? options.atUserId : null
+          atUserId: i === 0 ? options.atUserId : null,
+          mentionReply: i === 0 // Official QQ: one visible @ per text batch, using the frozen route.
         });
         this.#markSent(dedupeScope, text);   // 只有 OneBot 成功返回后才记入去重窗口
         const ts = Date.now();

@@ -1,9 +1,9 @@
 {
   "id": "red-packet-radar",
   "name": "红包雷达",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
-  "category": "fun",
+  "category": "utility",
   "description": "检测群里出现的红包（链接/口令形态），立即在群里提醒，并尝试自动领取（协议端支持时自动生效）。",
   "author": "QQ Agent",
   "enabledByDefault": true,

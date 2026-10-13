@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
-  "asOf": "2026-10-11",
+  "asOf": "2026-10-13",
   "upstream": {
-    "url": "https://github.com/prolet1966/QQ-Agent-for-Linux.git",
-    "commit": "da6f0560c1c7530a985bb4c1542a88cae104b80e",
-    "tag": "upstream-linux-base-20261007"
+    "url": "https://github.com/K0nd1us/QQ-agent.git",
+    "remote": "upstream-official",
+    "branch": "main",
+    "commit": "11577baad321d1774caf0765d791c211072bfa83",
+    "tag": "upstream-official-base-20261013"
   },
   "localBaselineTag": "local-docker-20261011",
   "features": [
@@ -69,6 +71,7 @@
       "title": "局域网鉴权和诊断",
       "files": [
         "src/console-auth.js",
+        "src/docker-server.js",
         "src/docker-env.js",
         "src/app.js",
         "src/qqbot.js",
@@ -85,6 +88,7 @@
       "mustPreserve": [
         "explicit Host and same-origin guard",
         "token required on LAN",
+        "chosen console passwords accept 8-256 cookie-safe characters; default generated token remains random and long; rotation invalidates old credentials without modifying robot data",
         "QQ source IP and local Host allowlists are distinct"
       ]
     },
@@ -142,7 +146,8 @@
         "src/prompt.js",
         "src/orchestrator.js",
         "src/store.js",
-        "ui/connection.js"
+        "ui/connection.js",
+        "src/qqbot-ingress.js"
       ],
       "tests": [
         "test/docker-mention-prompt.test.mjs",
@@ -153,7 +158,8 @@
       "mustPreserve": [
         "officialAtMe survives stripped content",
         "no false self mention for other people",
-        "ingress diagnostics do not claim a reply was sent"
+        "ingress diagnostics do not claim a reply was sent",
+        "bounded ingress metadata journal; no bodies, sender IDs or retroactive delivery claims; app-level blocked sender is not marked forwarded"
       ]
     },
     {
@@ -239,13 +245,14 @@
         "test/docker-quotes.test.mjs",
         "test/docker-quote-agent.test.mjs",
         "test/docker-reply-completion.test.mjs",
-        "test/docker-reply-completion-agent.test.mjs"
+        "test/docker-reply-completion-agent.test.mjs",
+        "test/docker-query-reply-agent.test.mjs"
       ],
       "mustPreserve": [
         "quoted media persisted separately and scoped to chat",
         "refMsgIdx is not a sendable message ID",
-        "one bounded reminder, never publish reasoning",
-        "zero-tool direct mention/private endings nudge once within round budget; no nudge for sent/finish/passive runs"
+        "initial and post-query reminders independently bounded to one each, at most two within existing round budget; never publish reasoning",
+        "post-query nudge requires completed matching read-only query result after the previous reminder; web search/fetch or current-message lookup only; no nudge for sent/send attempts/finish/passive or unknown side-effecting tools"
       ]
     },
     {
@@ -256,19 +263,30 @@
         "src/sender.js",
         "src/orchestrator.js",
         "src/tools.js",
-        "src/prompt.js"
+        "src/prompt.js",
+        "src/config.js",
+        "src/qqbot-send-diagnostics.js",
+        "src/routes.js"
       ],
       "tests": [
         "test/docker-reply-routing.test.mjs",
         "test/docker-reply-routing-agent.test.mjs",
         "test/docker-mention-prompt.test.mjs",
-        "test/docker-sdk.test.mjs"
+        "test/docker-sdk.test.mjs",
+        "test/docker-profiles-http.test.mjs",
+        "test/docker-send-diagnostics.test.mjs"
       ],
       "mustPreserve": [
         "freeze run context and route at enqueue time",
         "explicit target for multi-user trigger batches",
         "display # normalized only for exact same-chat IDs before queue/dedupe; no fuzzy match",
-        "expired/conflicting route fails instead of borrowing newer target"
+        "off mode never injects mention tags in group plain text; opt-in per-bot Markdown sends first-bubble tag only in markdown.content with explicit msg_type=2; pinned member, not group ID; matching prefix normalization, conflicts fail; OneBot unchanged",
+        "expired/conflicting route fails instead of borrowing newer target",
+        "only definitive same-group 4xx permission/unsupported-command rejection permits one clean plain fallback; no resend on timeout/network/5xx/expiry; no client-rendering claims from SDK fixtures",
+        "honor persisted off or legacy mode for desktop compatibility; turning Markdown off preserves pinned routing and explicit quotes; no auto Markdown enablement or claim of native plain-text rendering",
+        "distinguish current plain-text tag suppression from protocol capability; historical API success is not client-rendering evidence; do not infer all text mentions require Markdown",
+        "bounded per-client in-memory text send diagnostics whitelist SDK serialized metadata only; no bodies, identifiers, URLs, credentials or error text; async isolation, no retry/mutation and no client-rendering claims",
+        "legacy mode keeps historical SDK helpers and mention guidance; after confirmed raw-ID recurrence, suppress manual atUserId prefix and normalize matching model prefixes before split/history; atUserId still selects/validates frozen route; preserve msg_id, explicit quote, conflict/expiry guards and no Markdown injection; do not equate clean text with native mention rendering"
       ]
     },
     {
@@ -380,6 +398,317 @@
         "release compose preserves authentication and data isolation",
         "third-party licensing is separate; no runtime data or personal avatar originals in images"
       ]
+    },
+    {
+      "id": "L17",
+      "title": "严格模型端点工具Schema兼容",
+      "files": [
+        "src/tool-schema.js",
+        "src/tool-registry.js",
+        "src/tools.js",
+        "src/providers.js",
+        "skills/emotion-skill/index.js",
+        "skills/mood-skill/index.js",
+        "skills/mood-skill/mood-skill/index.js",
+        "ui/connection-models.js",
+        "ui/connection.html",
+        "doc/extend_development/skill-development.md",
+        "doc/extend_development/skill-reference.md"
+      ],
+      "tests": [
+        "test/docker-tool-schema.test.mjs",
+        "test/docker-connection-models.test.mjs"
+      ],
+      "mustPreserve": [
+        "normalize legacy empty or missing root tool schemas at registration and serialization without mutating definitions",
+        "reject explicit invalid root types/properties; preserve nested constraints and optional parameters, never force strict mode",
+        "basic connection probe is text-only, no skill execution, QQ messages or configuration changes"
+      ]
+    },
+    {
+      "id": "L18",
+      "title": "按机器人隔离的群备注与接收诊断",
+      "files": [
+        "src/group-names.js",
+        "src/qqbot-ingress.js",
+        "src/app.js",
+        "src/routes.js",
+        "src/qqbot.js",
+        "ui/connection.js",
+        "ui/connection.html",
+        "ui/connection.css",
+        "ui/app/02-sse-sessions.js",
+        "ui/app/04-archive-usage.js",
+        "ui/app/06-settings-render.js",
+        "ui/index.html",
+        "ui/group-alias.js",
+        "ui/group-alias.css"
+      ],
+      "tests": [
+        "test/docker-group-names.test.mjs",
+        "test/docker-channel.test.mjs",
+        "test/docker-profiles-http.test.mjs"
+      ],
+      "mustPreserve": [
+        "console aliases persist per robot; keep original OpenID for routing/allowlists and do not rename QQ groups or change model prompts",
+        "aliases use authenticated same-origin profile-context routes, escaped display and immediate refresh; empty alias restores fallback; DOM dialog supports embedded browsers and rejects cross-instance submit after await",
+        "ingress journal is bounded and metadata-only, scoped to current robot/group; no replay, policy relaxation or QQ test sends"
+      ]
+    },
+    {
+      "id": "L19",
+      "title": "ChatGPT2API 生图编辑与搜索技能",
+      "files": [
+        "skills/chatgpt2api-image/skill.json",
+        "skills/chatgpt2api-image/index.js",
+        "skills/chatgpt2api-image/runtime.js",
+        "skills/chatgpt2api-search/skill.json",
+        "skills/chatgpt2api-search/index.js",
+        "skills/chatgpt2api-search/runtime.js",
+        "src/chatgpt2api-client.js",
+        "src/skill-models.js",
+        "src/plugin-loader.js",
+        "src/routes.js",
+        "src/reply-completion.js",
+        "ui/app/06-settings-render.js",
+        "docs/CHATGPT2API.md",
+        "doc/extend_development/skill-reference.md"
+      ],
+      "tests": [
+        "test/docker-chatgpt2api.test.mjs"
+      ],
+      "mustPreserve": [
+        "disabled by default; no existing bot/model/skill configuration changes, no startup generation/search or live QQ tests",
+        "exact model IDs, scoped last-good model catalogs, manual IDs persist; changing service address clears old key unless a new key is supplied",
+        "persist before async task submission and queued QQ send; unknown outcomes never blindly regenerate or resend; same-chat references and per-profile jobs",
+        "fixed /v1/search engine is not advertised as model-switchable; optional model only summarizes results; whitelist answer and citations, no account fields or raw errors",
+        "generic authenticated profile-context model directory UI; no paid probes; preserve known query reminder bounds and exclude image/unknown side-effect tools"
+      ]
+    },
+    {
+      "id": "L20",
+      "title": "聚合搜索修复与可选ChatGPT来源",
+      "files": [
+        "plugins/search-aggregator/index.js",
+        "plugins/search-aggregator/plugin.json",
+        "plugins/search-aggregator/lib/aggregate.js",
+        "plugins/search-aggregator/lib/runtime.js",
+        "plugins/search-aggregator/search-aggregator/index.js",
+        "plugins/search-aggregator/search-aggregator/plugin.json",
+        "plugins/search-aggregator/search-aggregator/lib/aggregate.js",
+        "plugins/search-aggregator/search-aggregator/lib/runtime.js",
+        "skills/search-aggregator-skill/index.js",
+        "skills/search-aggregator-skill/skill.json",
+        "skills/search-aggregator-skill/search-aggregator-skill/index.js",
+        "skills/search-aggregator-skill/search-aggregator-skill/skill.json",
+        "skills/chatgpt2api-search/index.js",
+        "skills/chatgpt2api-search/runtime.js",
+        "skills/chatgpt2api-search/skill.json",
+        "skills/image-gen-skill/index.js",
+        "skills/image-gen-skill/skill.json",
+        "skills/image-gen-skill/image-gen-skill/index.js",
+        "skills/image-gen-skill/image-gen-skill/skill.json",
+        "src/reply-completion.js",
+        "docs/SEARCH-AGGREGATION.md",
+        "docs/CHATGPT2API.md"
+      ],
+      "tests": [
+        "test/docker-search-aggregator.test.mjs",
+        "test/docker-chatgpt2api.test.mjs"
+      ],
+      "mustPreserve": [
+        "lazy capability dispatch, default HTML engine name mapping and web_fetch permission; no setup search or implicit retry",
+        "optional GPT source uses active configured search.chatgpt2api provider and existing per-profile credentials; no auto enablement, credential copies or config migration",
+        "only/parallel/empty-HTML fallback; at most one GPT request per aggregate; no extra summary call or claimed search-model switching",
+        "bounded HTTP(S) sources, per-engine unique votes, partial failure vs empty results, deadlines and stop cancellation; uncited GPT answer stays separate from source rankings",
+        "search-first image calibration only returns prompts and respects rewrite/budget; no knowledge ingestion or QQ sends; known read-only reply reminder remains bounded",
+        "root and nested packaged copies stay identical; preserve installed external modules and existing configurations"
+      ]
+    },
+    {
+      "id": "L21",
+      "title": "官方 Git 主上游与独立扩展维护",
+      "files": [
+        "docs/OFFICIAL-UPSTREAM-MIGRATION.md",
+        "docs/upstream-source.json",
+        "docs/extensions/README.md",
+        "docs/extensions/catalog.json",
+        "scripts/upstream-inventory.mjs",
+        "src/thinking.js",
+        "src/llm.js",
+        "src/logger.js",
+        "src/onebot.js",
+        "src/app.js",
+        "src/orchestrator.js",
+        "src/prompt.js",
+        "src/store.js",
+        "src/skills/settings-patch.js",
+        "package.json",
+        "package-lock.json",
+        "scripts/lib.sh"
+      ],
+      "tests": [
+        "test/docker-upstream.test.mjs",
+        "test/prompt-anchor-test.mjs",
+        "test/wake-semantics-test.mjs",
+        "test/message-id-test.mjs",
+        "test/docker-version.test.mjs"
+      ],
+      "mustPreserve": [
+        "official commit is an ancestor, Linux is historical reference only; no unrelated-history merge",
+        "official trigger batching/mention identity/prompt anchors/thinking and logger improvements coexist with local reply guards",
+        "existing thinking adapter owns parameters when active; no double reasoning usage; no config rewrites",
+        "extension versions/catalog maintained separately; installed modules/config untouched by source migration",
+        "no production restart, real QQ sends or publication as a side effect of source migration",
+        "extension masked settings round-trip by stable account identity and same endpoint; no cross-endpoint key inheritance",
+        "explicit image search/send enablement is preserved during official core integration",
+        "application and lockfile root versions follow official upstream.version; packaging default matches; extension and immutable Docker release versions remain independent"
+      ]
+    },
+    {
+      "id": "L22",
+      "title": "全部现有扩展兼容修复与分层验证",
+      "files": [
+        "Dockerfile",
+        "examples/skills/bangumi-lookup/index.js",
+        "examples/skills/bangumi-lookup/skill.json",
+        "examples/skills/verify-first/index.js",
+        "examples/skills/verify-first/skill.json",
+        "examples/skills/whale-memes/index.js",
+        "examples/skills/whale-memes/skill.json",
+        "plugins/affinity/index.js",
+        "plugins/affinity/lib/aff-schema.js",
+        "plugins/affinity/lib/aff-store.js",
+        "plugins/affinity/plugin.json",
+        "plugins/body-state/index.js",
+        "plugins/body-state/lib/bs-state.js",
+        "plugins/body-state/plugin.json",
+        "plugins/conversation-memory/lib/cost-guard.js",
+        "plugins/conversation-memory/lib/pending.js",
+        "plugins/conversation-memory/plugin.json",
+        "plugins/kb-growth/index.js",
+        "plugins/kb-growth/lib/kb-audit.js",
+        "plugins/kb-growth/lib/kb-config.js",
+        "plugins/kb-growth/lib/kb-ingest.js",
+        "plugins/kb-growth/lib/kb-retrieve.js",
+        "plugins/kb-growth/lib/kb-worker.js",
+        "plugins/kb-growth/lib/search-fallback.js",
+        "plugins/kb-growth/plugin.json",
+        "plugins/media-download/bili.js",
+        "plugins/media-download/douyin.js",
+        "plugins/media-download/plugin.json",
+        "plugins/meme-engine/index.js",
+        "plugins/meme-engine/plugin.json",
+        "plugins/memory-growth/index.js",
+        "plugins/memory-growth/lib/mg-config.js",
+        "plugins/memory-growth/lib/mg-extract.js",
+        "plugins/memory-growth/lib/mg-retrieve.js",
+        "plugins/memory-growth/lib/mg-review.js",
+        "plugins/memory-growth/plugin.json",
+        "plugins/mood-tune/index.js",
+        "plugins/mood-tune/plugin.json",
+        "plugins/owner-identity/index.js",
+        "plugins/owner-identity/plugin.json",
+        "plugins/proactive-chat/index.js",
+        "plugins/proactive-chat/plugin.json",
+        "plugins/red-packet-radar/plugin.json",
+        "plugins/speaker-identity/index.js",
+        "plugins/speaker-identity/plugin.json",
+        "plugins/threads/index.js",
+        "plugins/threads/plugin.json",
+        "plugins/主动找聊/index.js",
+        "plugins/主动找聊/plugin.json",
+        "plugins/定时文案推送/index.js",
+        "plugins/定时文案推送/plugin.json",
+        "plugins/角色卡工具同步/index.js",
+        "plugins/角色卡工具同步/plugin.json",
+        "plugins/远程价格表/index.js",
+        "plugins/远程价格表/plugin.json",
+        "skills/affinity/index.js",
+        "skills/affinity/skill.json",
+        "skills/ask-admin-skill/index.js",
+        "skills/ask-admin-skill/skill.json",
+        "skills/conv-memory-skill/conv-memory-skill/index.js",
+        "skills/conv-memory-skill/conv-memory-skill/skill.json",
+        "skills/conv-memory-skill/index.js",
+        "skills/conv-memory-skill/skill.json",
+        "skills/emotion-skill/index.js",
+        "skills/emotion-skill/skill.json",
+        "skills/feeling-skill/index.js",
+        "skills/feeling-skill/skill.json",
+        "skills/knowledge-verify/index.js",
+        "skills/knowledge-verify/lib/image-source.js",
+        "skills/knowledge-verify/skill.json",
+        "skills/meme-lib/index.js",
+        "skills/meme-lib/meme-lib/index.js",
+        "skills/meme-lib/meme-lib/skill.json",
+        "skills/meme-lib/skill.json",
+        "skills/memory-growth-skill/index.js",
+        "skills/memory-growth-skill/skill.json",
+        "skills/mood-skill/index.js",
+        "skills/mood-skill/mood-skill/index.js",
+        "skills/mood-skill/mood-skill/skill.json",
+        "skills/mood-skill/skill.json",
+        "skills/reverse-image-pro/reverse-image-pro/index.js",
+        "skills/reverse-image-pro/reverse-image-pro/skill.json",
+        "skills/reverse-image-pro/skill.json",
+        "skills/threads-skill/index.js",
+        "skills/threads-skill/skill.json",
+        "skills/timed-message/skill.json",
+        "skills/todo-skill/index.js",
+        "skills/todo-skill/skill.json",
+        "skills/weather-alert/skill.json",
+        "skills/群友印象/index.js",
+        "skills/群友印象/skill.json",
+        "src/extension-context.js",
+        "src/orchestrator.js",
+        "src/plugin-loader.js",
+        "src/safe-fetch.js",
+        "docs/extensions/VALIDATION-20261013.md",
+        "docs/extensions/validation.json",
+        "scripts/upstream-inventory.mjs",
+        "package.json"
+      ],
+      "tests": [
+        "test/docker-extensions-compat.test.mjs",
+        "test/docker-extensions-data.test.mjs",
+        "test/docker-extensions-network.test.mjs",
+        "test/docker-extensions-installed.test.mjs",
+        "test/safe-fetch-file-test.mjs",
+        "test/coverage-offline.mjs",
+        "test/docker-extensions-guard.test.mjs",
+        "test/extensions-video-smoke.mjs"
+      ],
+      "mustPreserve": [
+        "lazy capability dispatch; await providers and report failure",
+        "OpenID exact strings; frozen requester; per-session/per-person isolation",
+        "profile paths; atomic writes; close old resources without clearing newer activation",
+        "public-only DNS-pinned bounded fetch for user URLs",
+        "no auto-enabling modules/model extraction; source-only external updates after complete backup",
+        "73 bundled plus 5 installed modules; structural/mock tests are not live API/GPU/QQ certification"
+      ]
     }
-  ]
+  ],
+  "legacyUpstream": {
+    "url": "https://github.com/prolet1966/QQ-Agent-for-Linux.git",
+    "commit": "da6f0560c1c7530a985bb4c1542a88cae104b80e",
+    "tag": "upstream-linux-base-20261007"
+  },
+  "migration": {
+    "fromCommit": "b4f8d11421624e6f23dcb026289fee52a18ee2fb",
+    "rollbackTag": "before-official-migration-20261013",
+    "strategy": "official-ancestry-with-reviewed-downstream-overlay",
+    "production": "deployed-after-tests-and-full-backup",
+    "deployment": {
+      "date": "2026-10-13",
+      "sourceCommit": "d7f37fc46d8661657081b35699a2007346ed4ace",
+      "imageId": "sha256:96196656f414f39e9f93c0240ae19209ce6894e95fb84979c49c3655986addcf",
+      "rollbackImage": "qq-agent-docker:before-official-20261013-144616",
+      "health": "healthy",
+      "qqConnected": true,
+      "protectedFilesUnchanged": 42,
+      "environmentUnchanged": true,
+      "published": false
+    }
+  }
 }

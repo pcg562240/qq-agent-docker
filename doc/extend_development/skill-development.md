@@ -249,6 +249,11 @@ parameters: {
 - 可选参数请不要塞进 `required`
 - 参数超过 5 个就考虑拆成多个工具 —— 参数越多，模型填错率越高
 
+**无参数工具也要声明对象根类型**：使用 `parameters: { type: 'object', properties: {} }`，不要只写 `{}`。
+严格的模型端点会因一个工具缺少根 `type` 而拒绝整轮聊天，例如 DeepSeek 的 `Invalid schema ... type: null`。
+本地宿主在注册和序列化时兼容旧的空值/空对象、补齐缺失的对象根类型；显式声明非对象根类型或错误的 `properties` 会给出带工具 ID 的错误。
+这不是完整的 JSON Schema 校验器，不会改写嵌套约束、可选参数或开启 `strict` 模式；新技能仍需自行提供正确 schema。
+
 ### 4.4 execute 的返回值
 
 ```js

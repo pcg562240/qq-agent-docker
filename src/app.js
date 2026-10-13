@@ -1,3 +1,4 @@
+import { isAtMe } from './prompt.js';
 // 总装：OneBot 事件接入 → 存储 → 编排器；HTTP API + SSE 给 UI。
 // Electron 主进程与 headless 服务器都从这里启动。
 import http from 'node:http';
@@ -14,6 +15,7 @@ import { QQQrLogin } from './qqbot-login.js';
 import { createQQLoginRoutes } from './qqbot-login-routes.js';
 import { RobotProfiles, profileError } from './robot-profiles.js';
 import { createRobotProfileRoutes } from './robot-profile-routes.js';
+import { GroupNames, createGroupNameRoutes } from './group-names.js';
 import { consoleAuthorized, consoleOriginAllowed, tokenEqual } from './console-auth.js';
 import { OneBotClient, segmentsToText, extractMediaFromSegments, expandForwardNodes } from './onebot.js';
 import { ChatStore } from './store.js';
@@ -887,6 +889,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
   // ── 组件 ──
   const visionScan = { running: false };   // 模型图片输入能力扫描的运行状态
   const store = new ChatStore(cfg.store?.maxMessagesPerChat ?? 0);   // 0 = 不限
+  const groupNames = new GroupNames(DATA_DIR);
   const memory = new MemoryStore();
   const sessions = new SessionRegistry(cfg.store?.keepSessionFiles ?? 0);   // 0 = 不限
   const onebot = cfg.channel?.type === 'qqbot' ? new QQBotClient({
@@ -1202,7 +1205,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
 
   async function ingestMessage(kind, id, event) {
     const cfgNow = getConfig();
-    if (!allowed(kind, id, cfgNow)) return; // 白名单外的聊天完全不记录
+    if (!allowed(kind, id, cfgNow)) return { ingress: 'not_allowed' }; // 白名单外的聊天完全不记录
 
     const segments = Array.isArray(event.message) ? event.message : null;
     const senderId = String(event.sender?.user_id ?? event.user_id ?? '');
@@ -1213,8 +1216,8 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     // 两道屏蔽：全局（所有群+私聊）优先，其次按群。
     if (senderId) {
       const globalBlocked = isGloballyBlocked(senderId);
-      if (globalBlocked) return;
-      if (kind === 'group' && (cfgNow.blocklist?.[id] || []).map(String).includes(senderId)) return;
+      if (globalBlocked) return { ingress: 'blocked_sender' };
+      if (kind === 'group' && (cfgNow.blocklist?.[id] || []).map(String).includes(senderId)) return { ingress: 'blocked_sender' };
     }
     const media = segments ? extractMediaFromSegments(segments) : [];
     const reply = await resolveIncomingQuote(event, {
@@ -1223,9 +1226,11 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     });
 
     let text;
+    const atMarks = [];
     if (segments) {
       text = await segmentsToText(segments, {
         resolveAtName: (qq) => kind === 'group' ? resolveAtName(id, qq) : null,
+        onAt: m => atMarks.push(m),
         // Persist quote separately; prompt rendering adds it exactly once.
         includeReply: false,
         // 语音转写（`media.transcribe`）要用它去 get_record 取音频
@@ -1254,15 +1259,24 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
       }
     }
 
-    if (!text && !media.length && !reply) return;
+    if (!text && !media.length && !reply) return { ingress: 'empty_message' };
+
+    // Official @-segment identity takes precedence over display names; QQ Gateway
+    // supplies an explicit marker after stripping its own mention from the text.
+    const selfIdNow = onebot.selfId || '';
+    const atMe = typeof event.officialAtMe === 'boolean' ? event.officialAtMe
+      : atMarks.length ? atMarks.some(m => m.qq !== 'all' && selfIdNow && String(m.qq) === String(selfIdNow))
+      : isAtMe(text, { selfId: selfIdNow, selfNickname: onebot.selfNickname,
+        botName: getConfig().persona?.botName || '' });
+    const atNames = atMarks.map(m => String(m?.text || '')).filter(Boolean);
 
     // ── 指令禁言：群内任何人 @机器人 + 发送指定指令 → 该群暂时固定 1 档（仅艾特）──
     // 在存档前处理：指令本身也要留档（让机器人知道被禁言了），但先设置禁言状态。
     if (kind === 'group') {
-      maybeTriggerCommandMute(id, text, event);
+      maybeTriggerCommandMute(id, text, event, atMe);
     }
 
-    store.appendIncoming(`${kind}:${id}`, {
+    const entry = store.appendIncoming(`${kind}:${id}`, {
       mid: event.message_id,
       ts: event.time ? Math.round(Number(event.time) * 1000) : Date.now(),
       senderId,
@@ -1270,10 +1284,11 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
       text: text || (media.length ? '[图片]' : '[引用消息]'),
       reply,
       media,
-      atMe: event.officialAtMe
+      atMe,
+      atNames
     });
     emit('chat-update', `${kind}:${id}`);
-    orchestrator.onIncoming(`${kind}:${id}`);
+    orchestrator.onIncoming(`${kind}:${id}`, entry);
 
     // 链接媒体转发（确定性）：刻意不 await —— 百兆级下载/上传不能卡住 ingest 热路径。
     // 内部已把错误全部收口（含 provider 抛错），这里再挂一次 catch 只为防漏网。
@@ -1284,7 +1299,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
    * 指令禁言：检测"@机器人 + 指定指令"，命中则把该群响应档位暂时固定为 1 档。
    * 禁言状态写入 config.commandMute.active[群号] = 到期时间戳（0 = 直到手动解除）。
    */
-  function maybeTriggerCommandMute(groupId, text, event) {
+  function maybeTriggerCommandMute(groupId, text, event, atMeOverride = null) {
     const cm = getConfig().commandMute;
     if (!cm || cm.enabled !== true) return;
     const command = String(cm.command || '').trim();
@@ -1293,7 +1308,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     const selfId = onebot.selfId;
     const botName = getConfig().persona?.botName || '';
     const selfNick = getConfig().persona?.selfNickname || onebot.selfNickname || '';
-    const atMe = event.officialAtMe === true || text.includes(`@${selfNick}`) || (botName && text.includes(`@${botName}`))
+    const atMe = typeof atMeOverride === 'boolean' ? atMeOverride : event.officialAtMe === true || text.includes(`@${selfNick}`) || (botName && text.includes(`@${botName}`))
       || (selfId && new RegExp(`\\[CQ:at(?:,[^\\]]*?)?qq=${selfId}[^\\]]*\\]`).test(text));
     if (!atMe) return;
     if (!text.includes(command)) return;
@@ -1621,8 +1636,9 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     res.once('finish', restart); res.once('close', restart);
   }
   const apiRoutes = [...createRobotProfileRoutes({ profiles, readBody, switchRobot, deleteRobot, context: profileContext }),
+    ...createGroupNameRoutes({ groupNames, readBody, emit }),
     ...createQQLoginRoutes({ qqLogin, onebot, readBody, emit, profiles, switchRobot }), ...createRoutes({
-    store, memory, sessions, onebot, orchestrator, sender,
+    store, memory, sessions, onebot, orchestrator, sender, groupNames,
     emit, log,
     localVersion, compareSemver, UPDATE_INFO_URL,
     sanitizeConfig, keyEndpointAllowed, sanitizeProvider,
@@ -1708,10 +1724,16 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
       }
       const method = req.method;
       if (pathname === '/api/integration' && method === 'GET') {
-        return json(res, 200, onebot.kind === 'qqbot' ? onebot.status() : {
+        const status = onebot.kind === 'qqbot' ? onebot.status() : {
           type: 'onebot', connected: onebot.connected, error: onebot.lastConnectError,
           docker: process.env.QQ_AGENT_DOCKER === '1'
+        };
+        if (status.peers) status.peers = status.peers.map(peer => {
+          if (peer.kind !== 'group') return peer;
+          const named = groupNames.describe(peer.id, peer.name);
+          return { ...peer, ...named, name: named.name || peer.id };
         });
+        return json(res, 200, status);
       }
       if (process.env.QQ_AGENT_DOCKER === '1' && /^\/api\/(snowluma|qq-portable)(?:\/|$)/.test(pathname)) {
         return json(res, 409, { error: '容器不启动 QQ/SnowLuma 桌面程序；请在连接设置选择官方通道或外部 OneBot。' });
@@ -2079,6 +2101,7 @@ export function createApp({ log = console.log, qqBotClass, qqQrConnect, onProfil
     // try { await stopPortableQQ(); } catch { /* ignore */ }
     // 释放单实例锁（下次启动才能再抢到）
     releaseInstanceLock();
+    logger.flush();
   }
 
   return { server, onebot, store, memory, stickers, sender, sessions, orchestrator, start, stop, emit, getConfig, updateConfig, launchSnowluma, stopSnowluma, snowlumaStatus, launchPortableQQ, stopPortableQQ, qqPortableStatus, reloadSkills,

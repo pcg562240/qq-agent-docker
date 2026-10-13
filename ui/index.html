@@ -14,6 +14,8 @@
        内联样式仍放行（style-src）：主题/布局大量使用内联 style 属性。 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; media-src 'self' data: blob:; connect-src 'self' https://kondius.cn; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/group-alias.css" />
+  <script defer src="/group-alias.js"></script>
   <!-- 主题预置：外链同步脚本（阻塞解析、先于首帧执行）。不放内联是为了 CSP：
        script-src 'self' 直接覆盖外链，内联则要维护 hash、一改就失效。 -->
   <script src="/theme-boot.js"></script>

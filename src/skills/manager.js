@@ -275,9 +275,6 @@ export class SkillManager {
       // 放在列表里而不是让前端再发一次请求：技能页本来就要拉一次列表。
       settings: this.settingsView(id),
       configSchema: (m.configSchema && typeof m.configSchema === 'object') ? m.configSchema : {},
-      // 模型清单：manifest 里声明的可选扩展（如 image-generate 的 modelsCatalog）。
-      // 与 configSchema 同理进白名单视图，供 UI 在设置弹窗里渲染"模型列表 + 官网链接"。
-      catalog: Array.isArray(m.modelsCatalog) ? m.modelsCatalog : [],
       requires: [...(m.requires || [])],
       missingRequires: missing,
       toolIds: [...(skill.toolIds || [])]
@@ -319,16 +316,44 @@ export class SkillManager {
    * 密文字段（configSchema 里标了 secret: true）脱敏成 '******'：
    * 设置接口会把整个配置回给前端，明文 Key/Cookie 不该出现在响应里。
    * 写入侧约定：收到 '******' 或空串表示"不修改"，保持原值
-   * —— 否则用户只是打开表单点保存，密文就被覆盖成六个星号了。
+   * —— 否则用户只是打开表单点了保存，密文就被覆盖成六个星号了。
+   *
+   * ⚠️ secret 判定还必须**下钻一层**（2026-09-26 审查二轮发现）：
+   *   ① 字段名兜底：manifest 作者忘了在 configSchema 标 secret 时，
+   *      名字命中 /key|token|secret|cookie|password/i 的字符串字段同样脱敏
+   *      —— skills/web-fetch 的 cookie（type=internal，无 secret 标记）曾把
+   *      SESSDATA 明文回传给浏览器。
+   *   ② 数组内对象：plugins/account-pool 的 settings.accounts[].key 存的是
+   *      真实 API Key，字段在数组第二层，顶层判 secret 永远罩不住它。
+   *      数组里的条目按"字段名含 key/token/secret/password 的字符串值"逐个
+   *      掩码（cookie 不掩：数组里没有这种形态，过度掩码会破坏 UI 结构）。
    */
   settingsView(id) {
     const skill = this.registry.get(id);
     if (!skill) return {};
     const values = this.settingsOf(id);
     const schema = skill.manifest.configSchema || {};
+    const SECRET_NAME_RE = /key|token|secret|password|cookie/i;
+    const mask = (v) => (String(v ?? '').trim() ? '******' : '');
+    const isSecretField = (k) => Boolean(schema[k]?.secret)
+      || (SECRET_NAME_RE.test(k) && typeof values[k] === 'string');
     const out = {};
     for (const [k, v] of Object.entries(values)) {
-      out[k] = schema[k]?.secret ? (String(v ?? '').trim() ? '******' : '') : v;
+      if (isSecretField(k)) { out[k] = mask(v); continue; }
+      if (Array.isArray(v)) {
+        // 数组型密钥容器（account-pool 的 accounts）：只掩码条目里的密钥值，
+        // 其余字段（id/baseUrl/model 等 UI 要显示的结构）原样保留
+        out[k] = v.map((item) => {
+          if (!item || typeof item !== 'object') return item;
+          const clone = { ...item };
+          for (const [ik, iv] of Object.entries(clone)) {
+            if (SECRET_NAME_RE.test(ik) && typeof iv === 'string' && iv.trim()) clone[ik] = '******';
+          }
+          return clone;
+        });
+        continue;
+      }
+      out[k] = v;
     }
     return out;
   }

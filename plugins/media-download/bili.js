@@ -1,3 +1,4 @@
+import { DATA_DIR } from '../../src/config.js';
 ﻿// B站访问与下载公共库
 //
 // 供 data/plugins/ 下 B站相关插件共用：
@@ -33,7 +34,7 @@ import { safeFetch } from '../../src/safe-fetch.js';
 import { safeFetchToFile } from './media-common.js';
 import { resolveParam, sleep, safeName, cleanupDir, createFailureNotifier } from './media-common.js';
 
-export const CACHE_DIR = path.join(process.cwd(), 'data', 'media-cache', 'bilibili');
+export const CACHE_DIR = path.join(DATA_DIR, 'media-cache', 'bilibili');
 const execFileAsync = promisify(execFile);
 // 小件（参数解包/文件名安全化/目录清扫/失败通知）收口在 media-common.js，这里 re-export 保持插件契约
 export { resolveParam, sleep, safeName };

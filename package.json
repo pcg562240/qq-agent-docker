@@ -1,8 +1,8 @@
 {
   "name": "qq-agent",
-  "version": "0.4.7",
+  "version": "0.4.0",
   "private": false,
-  "description": "QQ 群 AI 机器人（桌面版）：事件驱动的无状态 Agent，接 OpenAI 兼容 API，带会话式控制台。",
+  "description": "QQ Agent Docker / 官方 QQ 适配版，主上游 K0nd1us/QQ-agent Git 源码",
   "type": "module",
   "main": "electron/main.js",
   "license": "MIT",
@@ -15,7 +15,7 @@
     "name": "prolet1966",
     "email": "hs75311a@126.com"
   },
-  "//maintainerNote": "maintainer 指「这个 re-packaged 的 Linux 包由谁维护、问题反馈给谁」——即本项目。electron-builder 生成 .deb 时必须要有 maintainer 邮箱，缺失会直接报错：'Please specify author email in the application package.json. It is required to set Linux .deb package maintainer.'",
+  "//maintainerNote": "maintainer/build.linux.maintainer 保留历史 Linux 打包贡献者署名；Docker 分支由 downstreamMaintainer 维护，不代表继续以 Linux 仓库为主上游。",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -36,7 +36,10 @@
     "docker:up": "docker compose up -d",
     "test:local": "node --test test/docker-*.test.mjs test/steam-deals.test.mjs test/comfy-draw.test.mjs",
     "audit:local": "node scripts/check-local-overrides.mjs",
-    "audit:public": "node scripts/check-local-overrides.mjs --public-snapshot"
+    "audit:public": "node scripts/check-local-overrides.mjs --public-snapshot",
+    "upstream:inventory": "node scripts/upstream-inventory.mjs",
+    "test:upstream": "node test/prompt-anchor-test.mjs && node test/message-id-test.mjs && node test/wake-semantics-test.mjs",
+    "test:extensions": "node --test test/docker-extensions-*.test.mjs && node test/safe-fetch-file-test.mjs && node test/coverage-offline.mjs"
   },
   "dependencies": {
     "@tencent-connect/qqbot-connector": "1.2.0",
@@ -185,5 +188,11 @@
     "desktop",
     "electron",
     "linux"
-  ]
+  ],
+  "upstream": {
+    "repository": "https://github.com/K0nd1us/QQ-agent.git",
+    "commit": "11577baad321d1774caf0765d791c211072bfa83",
+    "version": "0.4.0"
+  },
+  "downstreamMaintainer": "pcg562240/qq-agent-docker"
 }

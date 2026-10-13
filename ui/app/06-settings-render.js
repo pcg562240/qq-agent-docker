@@ -790,10 +790,35 @@ function chatNameOf(chatKey) {
  */
 function formatChatTitle(chatKey, name = '') {
   const m = /^group:([A-Za-z0-9_-]+)$/.exec(String(chatKey || ''));
-  if (m) return name ? `${name}（${m[1]}）` : `群 ${m[1]}`;
+  if (m) return name && name !== m[1] ? `${name}（${m[1]}）` : `群 ${m[1]}`;
   const p = /^private:([A-Za-z0-9_-]+)$/.exec(String(chatKey || ''));
   if (p) return name ? `${name}（${p[1]}）` : `私聊 ${p[1]}`;
   return String(chatKey || '');
+}
+
+async function refreshChatNames() {
+  const instance = JSON.stringify(state.activeInst);
+  const data = await api('/api/chats');
+  if (instance !== JSON.stringify(state.activeInst)) return;
+  state.chats = data.chats || [];
+  renderChatList(); renderSessionList();
+  const title = $('#chat-name-title');
+  if (title && state.currentChatKey) title.textContent = formatChatTitle(state.currentChatKey, chatNameOf(state.currentChatKey));
+  lastDetailFp = null;
+  if (state.currentSessionId && state.tab === 'sessions') await loadSessionDetail(state.currentSessionId, { quiet: true });
+}
+
+async function editGroupAlias(chatKey) {
+  const groupId = /^group:([A-Za-z0-9_-]+)$/.exec(String(chatKey || ''))?.[1];
+  if (!groupId) return;
+  const current = (state.chats || []).find(c => c.key === chatKey)?.groupAlias || '';
+  const instance = JSON.stringify(state.activeInst);
+  const name = await window.askGroupAlias(current);
+  if (name === null || JSON.stringify(state.activeInst) !== instance) return;
+  try {
+    await api('/api/group-names', { method: 'POST', body: JSON.stringify({ groupId, name }) });
+    await refreshChatNames();
+  } catch (error) { alert(`保存群备注失败：${error.message}`); }
 }
 
 function clampInt(raw, min, max, fallback) {
@@ -1366,7 +1391,12 @@ function renderSkillSettingsModal(skill) {
     } else {
       input = `<input type="${isSecret ? 'password' : 'text'}" id="${id}" data-key="${esc(key)}" data-type="string" value="${isSecret ? '' : esc(v)}" placeholder="${isSecret ? (v ? '已设置（留空 = 不修改）' : '未设置') : ''}" autocomplete="off" />`;
     }
-    return `<div class="${cls}"><label>${label}${d.secret ? ' 🔒' : ''}</label>${input}${hint}</div>`;
+    const models = d.modelCatalog === true && !isSecret ? `<div class="sks-models" data-model-key="${esc(key)}">
+      <button class="btn btn-small" type="button" data-model-refresh>获取模型列表</button>
+      <select data-model-select aria-label="已获取的模型"><option value="">选择模型，或在上方手填 ID</option></select>
+      <div class="hint" data-model-status>使用已保存的地址和 Key；只读取模型目录，不测试生图，也不自动切换。</div>
+    </div>` : '';
+    return `<div class="${cls}"><label>${label}${d.secret ? ' 🔒' : ''}</label>${input}${models}${hint}</div>`;
   };
 
   // schema 里的 group 字段 → 渲染成小节标题（按键序保留先后）
@@ -1439,6 +1469,8 @@ function openSkillSettings(skillId) {
   overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   overlay.setAttribute('tabindex', '-1');
   overlay.focus();
+
+  bindSkillModelCatalog(overlay, skill);
 
   // 复选框旁边的"已开启/已关闭"文字要跟着变，否则看不出当前状态
   overlay.querySelectorAll('input[type="checkbox"][data-type="boolean"]').forEach((cb) => {
@@ -2422,5 +2454,49 @@ async function refreshPromptPreview(overrides = null) {
   // 两处预览 DOM（设置-工具页 / 技能页右侧）都原地换文本，不整页重渲染
   $$('.prompt-preview-content').forEach((pre) => {
     pre.textContent = renderPromptPreviewText();
+  });
+}
+
+// Generic optional directory UI: schema.modelCatalog + module.modelCatalog().
+// A failed/late refresh must not clear a manual model, the old list, or credentials.
+function bindSkillModelCatalog(overlay, skill) {
+  const instance = state.activeInst?.id || '';
+  const sameInstance = () => (state.activeInst?.id || '') === instance;
+  overlay.querySelectorAll('[data-model-key]').forEach(box => {
+    const key = box.dataset.modelKey;
+    const input = overlay.querySelector(`[data-key="${key}"]`);
+    const select = box.querySelector('[data-model-select]');
+    const status = box.querySelector('[data-model-status]');
+    const button = box.querySelector('[data-model-refresh]');
+    const fields = () => [...overlay.querySelectorAll('[data-key]')];
+    const connectionChanged = () => fields().some(el => {
+      const rule = skill.configSchema?.[el.dataset.key];
+      if (rule?.secret) return el.value.trim() !== '';
+      const bound = Object.values(skill.configSchema || {}).some(s => s?.secret && s.boundTo === el.dataset.key);
+      return bound && el.value.trim() !== String(skill.settings?.[el.dataset.key] || '').trim();
+    });
+    const paint = result => {
+      if (!overlay.isConnected || !sameInstance() || connectionChanged()) return;
+      const models = Array.isArray(result?.models) ? result.models : [];
+      select.innerHTML = '<option value="">选择模型，或在上方手填 ID</option>' + models.map(id => `<option value="${esc(id)}">${esc(id)}</option>`).join('');
+      select.value = models.includes(input.value) ? input.value : '';
+      status.textContent = models.length ? `已获取 ${models.length} 个候选模型；不代表已实测可用。手填 ID 和当前选择保持不变。` : '尚无缓存；先保存连接设置，再点击获取。也可直接手填模型 ID。';
+    };
+    select.addEventListener('change', () => { if (select.value) { input.value = select.value; input.dispatchEvent(new Event('input', { bubbles:true })); } });
+    const endpoint = `/api/skills/${encodeURIComponent(skill.id)}/model-catalog`;
+    let revision = 0;
+    button.addEventListener('click', async () => {
+      if (!sameInstance()) { status.textContent = '实例已切换，请关闭并重新打开设置。'; return; }
+      if (connectionChanged()) { status.textContent = '连接地址或 Key 尚未保存。请先保存并重新打开设置，再获取模型。'; return; }
+      const rev = ++revision;
+      button.disabled = true; status.textContent = '正在读取模型目录（不会生图）…';
+      try {
+        const result = await api(endpoint, { method:'POST' });
+        if (rev === revision) paint(result);
+      } catch { if (overlay.isConnected && rev === revision) status.textContent = '获取失败，请检查已保存的地址、Key 和服务。旧列表/当前模型未改动，仍可手填 ID。'; }
+      finally { if (rev === revision) button.disabled = false; }
+    });
+    const rev = revision;
+    void api(endpoint).then(result => { if (revision === rev) paint(result); }).catch(() => {});
   });
 }

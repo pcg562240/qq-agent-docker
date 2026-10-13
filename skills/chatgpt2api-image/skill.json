@@ -1,0 +1,74 @@
+{
+  "id": "chatgpt2api-image",
+  "name": "ChatGPT 生图与编辑",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "category": "media",
+  "description": "通过 chatgpt2api 文生图、多图参考、自然语言改图和可选遮罩编辑；支持异步任务查询与有确认的补发。不会启动 ComfyUI 或占用 QQ Agent 主聊天模型。",
+  "author": "QQ Agent local maintenance",
+  "enabledByDefault": false,
+  "permissions": [
+    "web_fetch"
+  ],
+  "capabilities": [],
+  "requires": [],
+  "settings": {
+    "baseUrl": "http://host.docker.internal:8030",
+    "apiKey": "",
+    "model": "gpt-image-2",
+    "timeoutMs": 300000,
+    "defaultSize": "auto",
+    "quality": "auto",
+    "maxImageMB": 8
+  },
+  "configSchema": {
+    "baseUrl": {
+      "type": "string",
+      "label": "chatgpt2api 服务地址",
+      "description": "先保存地址和 Key，再获取模型。Docker 访问宿主机用 http://host.docker.internal:8030；也可填写可达的局域网地址。支持根地址或 /v1。更换地址时不沿用旧 Key。"
+    },
+    "apiKey": {
+      "type": "string",
+      "label": "服务用户 API Key",
+      "secret": true,
+      "boundTo": "baseUrl",
+      "description": "填写 chatgpt2api 的业务用户 Key，不是 ChatGPT 账号 Token。留空保持原值；改服务地址后须重新填写。"
+    },
+    "model": {
+      "type": "string",
+      "label": "生图模型 ID（可自定义）",
+      "modelCatalog": true,
+      "description": "点击获取候选模型或手动输入完整 ID，原样发送，保留大小写。列表缺失不代表不可调用；不自动换模型。"
+    },
+    "timeoutMs": {
+      "type": "number",
+      "label": "等待上限（毫秒）",
+      "min": 10000,
+      "max": 600000,
+      "step": 1000
+    },
+    "defaultSize": {
+      "type": "string",
+      "label": "默认输出尺寸",
+      "description": "auto 保留原图；可填 512x512、768x768 等（最大 4096x4096）。明确尺寸由服务端后处理，不代表原生小尺寸或更快。"
+    },
+    "quality": {
+      "type": "enum",
+      "values": [
+        "auto",
+        "low",
+        "medium",
+        "high"
+      ],
+      "label": "默认质量要求",
+      "description": "网页提示词中的质量要求，不保证原生质量档位。"
+    },
+    "maxImageMB": {
+      "type": "number",
+      "label": "单张图片上限（MB）",
+      "min": 1,
+      "max": 20,
+      "step": 1
+    }
+  }
+}

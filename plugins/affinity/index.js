@@ -20,13 +20,14 @@ import { applyInbound, materializeState as materializeOf } from './lib/aff-apply
 // 复用核心导出，唯一真源 —— 官方 conversation-memory 插件同款做法。
 import { DATA_DIR } from '../../src/config.js';
 import fs from 'node:fs';
+import { memberId } from '../../src/extension-context.js';
 import path from 'node:path';
 
 
 let cfg = () => ({});
 let api = null;
 let store = null;
-let dataDir = null;
+let dataDir = path.join(DATA_DIR, 'affinity');
 let stateCache = null;
 let stateCacheAt = 0;
 
@@ -58,6 +59,7 @@ export async function activate(ctx) {
 export async function deactivate(ctx) {
   try { store?.close(); } catch {}
   store = null;
+  pendingTrigger.clear();
   stateCache = null;
   api.log?.('affinity: 已停用');
 }
@@ -65,6 +67,7 @@ export async function deactivate(ctx) {
 export function dispose() {
   try { store?.close(); } catch {}
   store = null;
+  pendingTrigger.clear();
 }
 
 function state() {
@@ -139,10 +142,10 @@ function liveRows() {
 /** 检索：QQ 前缀（纯数字）或昵称关键字（按「现网优先、档案兜底」排序）。 */
 function searchPeople(q, limit = 50) {
   const kw = String(q ?? '').trim();
-  const num = /^\d+$/.test(kw);
+  const num = /^[0-9a-f]+$/i.test(kw);
   const rows = [];
   for (const r of liveRows()) {
-    if (!kw || (num ? r.personId.startsWith(kw) : true)) rows.push({ personId: r.personId, name: '', source: '现网', score: r.score, tierName: r.tier.name });
+    if (!kw || (num ? r.personId.toLowerCase().startsWith(kw.toLowerCase()) : false)) rows.push({ personId: r.personId, name: '', source: '现网', score: r.score, tierName: r.tier.name });
   }
   for (const d of snapshotStats()?.top ?? []) {
     if (!kw || (num ? d.personId.startsWith(kw) : String(d.name || '').includes(kw))) {
@@ -195,6 +198,7 @@ export const providers = {
     s.last_talk_at = new Date().toISOString();
     state().markDirty();
     materializeOf(s, c);
+    state().flush();
     return { ok: true, score: Math.round(s.score ?? 55) };
   },
 
@@ -249,6 +253,7 @@ export const providers = {
     if (!rb.enabled) return { ok: false, error: '轮回未启用（settings.rebirth.enabled）' };
     if (confirm !== true) return { ok: false, error: '需 confirm=true（轮回是硬操作）' };
     const s = state().getState(personId);
+    s.raw = 0;
     s.rawToday = 0;
     s.events = [];
     s.rebirth = s.rebirth || { count: 0, buffMult: 1, lastAt: null, pending: false };
@@ -257,6 +262,7 @@ export const providers = {
     s.rebirth.lastAt = new Date().toISOString();
     state().markDirty();
     materializeOf(s, c);
+    state().flush();
     return { ok: true, count: s.rebirth.count, phrase: rebirthPhrase(rb.phrasePool), score: Math.round(s.score ?? 55) };
   },
 
@@ -408,19 +414,14 @@ export const hooks = {
   'before-context'(ctx = {}) {
     try {
       const entries = Array.isArray(ctx.triggerEntries) ? ctx.triggerEntries : [];
-      const texts = [];
-      const people = [];
+      const people = new Map();
       for (const e of entries) {
-        const t = String(e?.text ?? '').trim();
-        if (t) texts.push(t);
-        const uid = String(e?.senderId ?? '').trim();
-        if (uid && !people.includes(uid)) people.push(uid);
+        const uid = memberId(e?.senderId);
+        if (!uid || e?.self) continue;
+        people.set(uid, ((people.get(uid) || '') + '\n' + String(e?.text || '')).slice(0, 800));
       }
-      pendingTrigger.set(String(ctx.sessionId || ctx.chatKey || ''), {
-        triggerText: texts.join('\n').slice(0, 800),
-        personIds: people,
-        chatKey: ctx.chatKey,
-      });
+      pendingTrigger.set(String(ctx.sessionId || ctx.chatKey || ''), { people, chatKey: ctx.chatKey });
+      while (pendingTrigger.size > 100) pendingTrigger.delete(pendingTrigger.keys().next().value);
     } catch { /* 收集失败不影响主流程 */ }
   },
 
@@ -434,21 +435,14 @@ export const hooks = {
       pendingTrigger.delete(key);            // 用完即删，不用 Map 长期持有会话引用
       if (!trig) return;
 
-      const personId = trig.personIds[0] || '';   // 本轮第一说话人（好感度按人算）
-      if (!personId) return;
-
-      // 1) 词表反馈（零 token，纯子串匹配）—— 入站即记账
-      try {
-        const s = state().getState(personId);
-        const adminList = String(c.adminUsers ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-        const r = applyInbound(s, trig.triggerText, {
-          cfg: c,
-          targetsAdmin: adminList.includes(personId),
-          chatKey: trig.chatKey,
-        });
+      const adminList = String(c.adminUsers ?? '').split(',').map(x => x.trim()).filter(Boolean);
+      for (const [uid, text] of trig.people) {
+        const r = applyInbound(state().getState(uid), text, { cfg: c, targetsAdmin: adminList.includes(uid), chatKey: trig.chatKey });
         if (r.applied) state().markDirty();
-      } catch { /* 记账失败不影响注入 */ }
-
+      }
+      // Mixed-user turns have no single relationship target; do not impose one person's attitude on everyone.
+      if (trig.people.size !== 1) return;
+      const personId = trig.people.keys().next().value;
       // 2) 注入（宿主 injectOnlyWhenMeaningful：熟客档不注入，省 token）
       if (c.inject === false) return;
       const s2 = state().getState(personId);

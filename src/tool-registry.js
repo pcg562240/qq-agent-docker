@@ -24,6 +24,7 @@
 // 必然出现"UI 说能用、运行时空工具列表"的割裂。现在只有这一处口径。
 
 import { getConfig } from './config.js';
+import { normalizeToolParameters } from './tool-schema.js';
 import { SKILL_ERROR, skillErrorText } from './skills/errors.js';
 // 默认用全局 SkillManager 单例：见下面 getToolAvailability 里的说明。
 // 无循环依赖 —— manager.js 只 import registry/capabilities/config/errors，不碰本文件。
@@ -53,7 +54,8 @@ export function registerTool(def) {
     // requires：需要的能力名（如 'knowledge.search'）。
     // 与 skillId 的区别：skillId 是"谁注册的"，requires 是"运行时必须有什么能力"。
     requires: [],
-    ...def
+    ...def,
+    parameters: normalizeToolParameters(def.parameters, def.id)
   }));
 }
 

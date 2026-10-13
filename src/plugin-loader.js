@@ -1,3 +1,4 @@
+import { safeFetch, safeFetchBinary } from './safe-fetch.js';
 // Skill / 插件加载器：扫描 plugins/ 与 skills/ 两个目录。
 //
 // 两个目录的区别是**语义分类**，不是格式新旧（两种清单文件功能完全等价，
@@ -24,6 +25,7 @@
 //   4. 生命周期真实性：禁用一定调 deactivate，避免"开关关了但监听器还在"
 
 import fs from 'node:fs';
+import { format } from 'node:util';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { registerTool, unregisterTool, unregisterToolsBySkill, getTool, listTools } from './tool-registry.js';
@@ -117,13 +119,18 @@ function createSkillApi(skillId, permissions = []) {
     },
     hasCapability: (name) => skillManager.hasCapability(name),
     // 日志
-    log: (...args) => console.log(`[skill:${skillId}]`, ...args),
-    warn: (...args) => console.warn(`[skill:${skillId}]`, ...args),
-    error: (...args) => console.error(`[skill:${skillId}]`, ...args),
+    log: (...args) => console.log(`[skill:${skillId}]`, format(...args)),
+    warn: (...args) => console.warn(`[skill:${skillId}]`, format(...args)),
+    error: (...args) => console.error(`[skill:${skillId}]`, format(...args)),
     // 只有声明了 web_fetch 权限才拿得到 fetch
     fetch: has('web_fetch')
       ? globalThis.fetch
       : () => Promise.reject(new Error(`Skill ${skillId} 未声明 web_fetch 权限`)),
+    // Public-page helpers: permission-gated, DNS pinned, bounded, every-hop checked.
+    safeFetchText: has('web_fetch') ? (url, options = {}) => safeFetch(url, { ...options, browseLocked: true })
+      : () => Promise.reject(new Error('未声明 web_fetch 权限')),
+    safeFetchBinary: has('web_fetch') ? (url, maxBytes, options = {}) => safeFetchBinary(url, maxBytes, { ...options, browseLocked: true, publicOnly: true })
+      : () => Promise.reject(new Error('未声明 web_fetch 权限')),
     utils: {
       sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
       safeJsonParse: (text, fallback = null) => {
@@ -439,6 +446,8 @@ async function loadSkillDir(dir, { log = console.log, kind = null } = {}) {
     // 可供路由/外部调用的"手动动作"钩子（如 AI额度情报 的 manualRefresh，
     // 被 /api/deals/refresh 调用）。与 activate/deactivate 同规则透传。
     manualRefresh: typeof mod.manualRefresh === 'function' ? mod.manualRefresh : null,
+    // Read cached models (GET) or explicitly fetch the directory (POST); no generation.
+    modelCatalog: typeof mod.modelCatalog === 'function' ? mod.modelCatalog : null,
     // 「免费模型自动探测」扩展点：freePoolStatus 只读现状（设置页打开时拉），
     // refreshFreePool 强制重探（「立即探测」按钮）。没实现的模块这两个是 null，
     // 路由会如实回「该模块没有这个能力」而不是假装成功。

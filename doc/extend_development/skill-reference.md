@@ -505,6 +505,8 @@ parameters: {
 ```
 
 要点：
+- 根类型必须是 `type: 'object'`；无参数写 `parameters: { type: 'object', properties: {} }`，不是 `{}`。
+- 本地注册表和 OpenAI 工具序列化兼容旧空 schema/缺失根类型，但显式非对象根类型或非对象 `properties` 会报错；不改嵌套类型、`required` 或 `additionalProperties`，不自动开启 `strict`。
 - 每个参数都要写 `description`，模型才能填对。
 - `required` 里没列的参数要准备默认值。
 - 参数名建议用英文小写。
@@ -1435,3 +1437,21 @@ skills/    LLM 型（kind = 'skill'）
 
 > ⚠️ 想让模型直接用上新功能，**只有注册工具这一条路** —— 详细判据与实例见
 > [skill-development.md](./skill-development.md) 与 [plugin-development.md](./plugin-development.md)。
+
+## 本地扩展：模型目录按钮与密钥地址绑定
+
+可选 `configSchema.<模型字段>.modelCatalog: true` 在字符串输入旁渲染「获取模型列表」及选择框，手填保持可用。
+模块导出 `async modelCatalog({refresh})`，返回 `{models: string[], updatedAt: string|null}`；`refresh:false` 只读缓存，`true` 仅手动请求目录，不生成/执行付费探测。
+宿主透传到 `GET/POST /api/skills/:id/model-catalog`，仍使用控制台鉴权和机器人上下文保护。缓存和配置隔离由模块实现，失败不得清空旧目录/手填模型。参考 `skills/chatgpt2api-image/`。
+
+密钥字段可声明 `secret:true, boundTo:'baseUrl'`。设置路由在服务地址变化而未明确提交新密钥时清空旧密钥；同地址留空或 `******` 保持原值，根地址与 `/v1` 等价。启用这项保护不会借用主模型或其他技能的 Key。
+
+
+## Docker 扩展补充（2026-10-13）
+
+- `api.capability(name,args)` 立即执行，必须在工具执行时动态检查并 `await`，不要在 setup 缓存结果后当函数调用。
+- `api.safeFetchText(url,{maxBytes,timeoutMs})` / `api.safeFetchBinary(url,maxBytes,{timeoutMs,headers})` 需要 `web_fetch` 权限。前者返回 `{body,statusCode,contentType,truncated,url}`，后者返回 `{buffer,contentType}`。强制 DNS 全记录检查、IP 固定、逐跳重定向和浏览白名单；不继承允许私有图床的例外。文本最多 5 MB、二进制 32 MiB，超限图片须拒绝使用。
+- hook 的会话键是 `sessionId`；工具调用者从冻结的 `ctx.session.trigger` 获取，多人批次必须显式指明对象，不要从最新聊天推断。
+- 数字 QQ 号与 32 位十六进制官方 OpenID 均按字符串保留。`src/extension-context.js` 提供维护版 helper。
+- 新核心能力 `chat.run-guard` 在模型调用前取 `{block,reason}`；本版 proactive-chat 是运行守卫，不是独立主动发言调度器。
+- 外置包必须在 `extensions/skills/ID` 安装布局验证；库源码示例位于 `examples/skills`，不表示已在当前机器人启用。

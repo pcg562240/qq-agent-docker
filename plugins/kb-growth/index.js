@@ -1,3 +1,4 @@
+import { safeFetch } from '../../src/safe-fetch.js';
 // kb-growth —— 知识库自增长闭环（V0.3.1 确定性插件）
 //
 // 一句话原则：回答不等入库，入库不堵回答；候选与正式分离；不遍历全库；可审计可回滚。
@@ -25,6 +26,7 @@ import { raceTimeout, nowMs, newId, sha256Hex, summarize, tokenize, round } from
 import { COLLECTIONS, STATUS } from './lib/kb-schema.js';
 import { searchWebFallback } from './lib/search-fallback.js';
 import fs from 'node:fs';
+import path from 'node:path';
 
 export const NO_RESULT_NOTE = '暂无，已记录。';
 
@@ -64,6 +66,8 @@ function scheduleSemanticProbe() {
 }
 
 let api = null;
+let generation = 0;
+let flushTimer = null;
 
 export function setup(a) {
   api = a;
@@ -82,40 +86,41 @@ export function available() {
 
 export async function activate(ctx) {
   const c = cfg();
-  // 1) Mongo 软依赖探活（不阻塞 activate，后台跑）
+  const epoch = ++generation;
+  const handle = new MongoHandle({ uri: c.mongoUri, db: c.mongoDb });
   mongoProbeState = { ok: false, reason: '探测中', probeAt: Date.now() };
-  (async () => {
-    try {
-      mongoHandle = new MongoHandle({ uri: c.mongoUri, db: c.mongoDb });
-      await mongoHandle.connect({ serverSelectionTimeoutMs: 800 });
-      mongoProbeState = { ok: true, reason: 'connected', probeAt: Date.now() };
-      api.log?.('kb-growth: MongoDB 已连接 ' + c.mongoUri);
-    } catch (e) {
-      mongoHandle = null;
-      mongoProbeState = { ok: false, reason: e?.message ?? String(e), probeAt: Date.now() };
-      api.log?.('kb-growth: MongoDB 不可用 → 降级纯本地词面检索（' + e?.message + '）');
-    }
-  })();
+  try {
+    await handle.connect({ serverSelectionTimeoutMs: 800 });
+    if (epoch !== generation) { await handle.close(); return; }
+    mongoHandle = handle;
+    mongoProbeState = { ok: true, reason: 'connected', probeAt: Date.now() };
+  } catch {
+    await handle.close(); if (epoch !== generation) return;
+    mongoHandle = null;
+    mongoProbeState = { ok: false, reason: '数据库连接失败（检查地址与凭据）', probeAt: Date.now() };
+  }
 
   // 2) 审计日志
   auditLogger = new AuditLogger({ enabled: true, flushIntervalMs: 1000, maxBuffer: 500 });
+  const queueMongo = mongoHandle, queueAudit = auditLogger;
   // 3) 入队队列（内存，微秒级入队不 await IO）
   ingestQueue = new IngestQueue({
     maxSize: 500,
     dedupeMs: 600000,
     onFlush: async (items) => {
-      if (!mongoHandle || !mongoProbeState.ok) {
+      if (!queueMongo?.db) {
         // Mongo 不可用：死信落盘，不卡
         const file = resolvePath('kb-growth/dead-letter.jsonl');
-        try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch {}
-        try { fs.appendFileSync(file, items.map((i) => JSON.stringify(i)).join('\n') + '\n'); } catch {}
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.appendFileSync(file, items.map((i) => JSON.stringify(i)).join('\n') + '\n');
         return;
       }
       try {
-        const db = mongoHandle.db;
+        const db = queueMongo.db;
         const now = new Date();
         for (const item of items) {
-          await db.collection(COLLECTIONS.tasks).insertOne({
+          item.taskId ||= newId();
+          await db.collection(COLLECTIONS.tasks).updateOne({ task_id: item.taskId }, { $setOnInsert: {
             task_id: item.taskId ?? newId(),
             tenant_id: item.tenantId ?? 'default',
             kind: item.kind,
@@ -125,10 +130,11 @@ export async function activate(ctx) {
             attempts: 0,
             created_at: now,
             expires_at: new Date(now.getTime() + 37 * 86400_000),
-          });
+          } }, { upsert: true });
         }
       } catch (e) {
-        auditLogger?.log('worker.enqueue_failed', { error: e?.message });
+        queueAudit?.log('worker.enqueue_failed', { error: '数据库写入失败，保留队列待重试' });
+        throw Error('知识入队写入失败');
       }
     },
   });
@@ -141,9 +147,15 @@ export async function activate(ctx) {
       semanticUrl: c.semanticEmbedUrl || 'http://127.0.0.1:3917',
     });
     await probeSemantic();
+    if (epoch !== generation) return;
     scheduleSemanticProbe();
     api.log?.('kb-growth: 语义向量服务 ' + (semanticProbeState.ok ? '已连接' : '不可用 → 退回哈希向量（' + semanticProbeState.reason + '）'));
   }
+
+  if (epoch !== generation) return;
+  if (flushTimer) clearInterval(flushTimer);
+  flushTimer = setInterval(() => ingestQueue?.flush().catch(() => {}), 5000);
+  flushTimer.unref?.();
 
   // 5) 后台 Worker（独立 tick，原子租约领取；含索引建立 + AutoApprove 晋升 + 租约回收）
   worker = new IngestWorker({
@@ -157,32 +169,26 @@ export async function activate(ctx) {
     config: cfg,
     embedder,
   });
-  await worker.start();
+  const runningWorker = worker;
+  await runningWorker.start();
+  if (epoch !== generation) { await runningWorker.stop(); return; }
   api.log?.('kb-growth: 后台 Worker 已启动（tick ' + (c.worker?.intervalMs ?? 1500) + 'ms，晋升每 ' + (Number(c.promoteEveryMs) || 30_000) + 'ms）');
 }
 
 export async function deactivate(ctx) {
-  // 必须清掉 activate 建的东西，否则"关掉了但还在推"
-  if (semanticProbeTimer) { clearInterval(semanticProbeTimer); semanticProbeTimer = null; }
-  try { await worker?.stop(); } catch {}
-  worker = null;
-  try { await ingestQueue?.flush(); } catch {}
-  ingestQueue = null;
-  try { auditLogger?.close(); } catch {}
-  auditLogger = null;
-  try { await mongoHandle?.close(); } catch {}
-  mongoHandle = null;
-  embedder = null;
-  api.log?.('kb-growth: 已停用，后台任务全部清理');
+  generation++;
+  if (flushTimer) clearInterval(flushTimer); flushTimer = null;
+  if (semanticProbeTimer) clearInterval(semanticProbeTimer); semanticProbeTimer = null;
+  const oldWorker = worker, oldQueue = ingestQueue, oldAudit = auditLogger, oldMongo = mongoHandle;
+  worker = null; ingestQueue = null; auditLogger = null; mongoHandle = null; embedder = null;
+  mongoProbeState = { ok: false, reason: '已停用', probeAt: Date.now() };
+  try { await oldWorker?.stop(); } catch {}
+  try { await oldQueue?.flush(); } catch { api.warn?.('知识队列停用时落盘失败'); }
+  try { oldAudit?.close(); } catch {}
+  try { await oldMongo?.close(); } catch {}
 }
 
-export function dispose() {
-  mongoHandle = null;
-  worker = null;
-  ingestQueue = null;
-  auditLogger = null;
-  embedder = null;
-}
+export function dispose() { return deactivate(); }
 
 // ── providers ────────────────────────────────────────────────────
 export const providers = {
@@ -246,7 +252,7 @@ export const providers = {
 
     if (web && web.results?.length) {
       const context = buildKbContext(web.results.map((r) => ({
-        title: r.title, content: r.snippet ?? r.content, sourceUrl: r.url,
+        title: r.title, content: r.snippet ?? r.content, source_url: r.url,
       })), c.retrieve?.maxContextChars ?? 2600);
       if (c.fallback?.ingestResults !== false) {
         ingestQueue?.enqueue({
@@ -448,8 +454,9 @@ export const providers = {
     // 宿主 crawlUrl 走 kb-growth.js 的 fetch + 图片采集，这里简化：抓正文 → 走 agent-write 同路
     let text = '';
     try {
-      const res = await fetch(String(url), { signal: AbortSignal.timeout(10_000) });
-      text = await res.text();
+      const res = await safeFetch(String(url), { browseLocked: true, timeoutMs: 10000, maxBytes: 600000 });
+      if (res.statusCode < 200 || res.statusCode >= 300) throw new Error('HTTP ' + res.statusCode);
+      text = res.body;
       text = stripHtml(text);
     } catch (e) {
       return { ok: false, error: '抓取失败：' + (e?.message ?? e) };
@@ -471,20 +478,20 @@ function localLexicalRecall(c, { tenant, query, topK }) {
     const scored = lines.map((line) => {
       try {
         const doc = JSON.parse(line);
+        if (String(doc.tenant_id || 'default') !== String(tenant)) return null;
         const toks = new Set(doc.tokens ?? []);
         let hit = 0;
         for (const t of qTokens) if (toks.has(t)) hit++;
         const conf = qTokens.length ? hit / qTokens.length : 0;
         return { ...doc, _conf: conf };
       } catch { return null; }
-    }).filter(Boolean).sort((a, b) => b._conf - a._conf).slice(0, topK);
+    }).filter(r => r && r._conf >= (c.hardMinConfidence ?? 0.58)).sort((a, b) => b._conf - a._conf).slice(0, topK);
     const maxConf = scored[0]?._conf ?? 0;
     return { confidence: maxConf, hits: scored };
   } catch { return { confidence: 0, hits: [] }; }
 }
 
 // ── 辅助函数 ──────────────────────────────────────────────────────
-import path from 'node:path';
 function stripHtml(html) {
   return String(html ?? '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')

@@ -7,16 +7,19 @@
 | 名称 | 用途 |
 | --- | --- |
 | `main` | 本地可工作的定制版本，不直接等同上游 main |
-| `upstream-linux` | 只取代码的上游 remote，指向 `prolet1966/QQ-Agent-for-Linux` |
+| `upstream-official` | 唯一主上游 remote，指向 `K0nd1us/QQ-agent` 官方 Git 源码 |
+| `upstream-official-base-20261013` | 官方 Git 基线 `11577baad321d1774caf0765d791c211072bfa83` |
+| `upstream-linux` | 历史来源只读参考，不再向主线合并 |
+| `before-official-migration-20261013` | 迁移前本地源码回退锚点 |
 | `upstream-linux-base-20261007` | 原始导入提交 `da6f0560c1c7530a985bb4c1542a88cae104b80e` |
 | `local-docker-20261011` | 已完成的本地功能和本轮维护文档快照，不表示正式发布 |
-| `integrate/upstream-日期` | 每次更新的临时集成分支，验证完成才合回 main |
+| `codex/upstream-日期` | 每次更新的临时集成分支，验证完成才合回 main |
 | `origin` | `pcg562240/qq-agent-docker`，公开 main 为独立的干净发布历史，仅推 `public:main` |
 | `public` | 对应公开 main，不合并本地集成 main 的旧历史 |
 
-`upstream-linux` 的 push URL 设置为 `disabled://local-read-only`，本仓库 `push.default=nothing`，避免裸 `git push` 误发。它们只是本地防误操作设置，不会阻止有意指定 URL 的发布，也不随 clone 自动继承。
+`upstream-official` 和 `upstream-linux` 的 push URL 设置为 `disabled://local-read-only`，本仓库 `push.default=nothing`，避免裸 `git push` 误发。它们只是本地防误操作设置，不会阻止有意指定 URL 的发布，也不随 clone 自动继承。
 
-现有定制提交以上游真实提交为父提交，不是无关历史。较早的会话没有独立提交，因此没有“每次修复一条原始 commit”；按功能定位依靠改动清单、文件 diff 和测试。
+新集成主线以官方真实 Git commit 为祖先，不合并无关 Linux 历史；迁移过程见 [迁移记录](OFFICIAL-UPSTREAM-MIGRATION.md)。较早的会话没有独立提交，因此没有“每次修复一条原始 commit”；按功能定位依靠改动清单、文件 diff 和测试。
 
 ## 先查看我们改了什么
 
@@ -25,16 +28,16 @@
 ```bash
 git status --short --branch
 git log --oneline --decorate -8
-git diff --stat upstream-linux-base-20261007..main
-git diff --name-status upstream-linux-base-20261007..main
+git diff --stat upstream-official-base-20261013..main
+git diff --name-status upstream-official-base-20261013..main
 # 精确查看关键实现，不只看新文件：
-git diff upstream-linux-base-20261007..main -- src/app.js src/config.js src/routes.js
-git diff upstream-linux-base-20261007..main -- src/qqbot.js src/sender.js src/orchestrator.js
+git diff upstream-official-base-20261013..main -- src/app.js src/config.js src/routes.js
+git diff upstream-official-base-20261013..main -- src/qqbot.js src/sender.js src/orchestrator.js
 # 当前是否偏离最初本地交付：
 git diff local-docker-20261011..HEAD -- src ui examples/skills test
 ```
 
-原 README 保存在 `docs/UPSTREAM-LINUX-README.md`。原版 `.github` 和 `ci-input/app-code.tar.gz` 初次导入时有意没有复制，因此 Git diff 中显示删除：不是这轮误删了本机文件。不要为了让 diff 变小恢复未知 CI、发布凭据或缓存归档。
+原 Linux README 保存在 `docs/UPSTREAM-LINUX-README.md`。原版 `.github` 和 `ci-input/app-code.tar.gz` 初次导入时有意没有复制，因此 Git diff 中显示删除：不是这轮误删了本机文件。不要为了让 diff 变小恢复未知 CI、发布凭据或缓存归档。
 
 ## 一次上游更新的操作顺序
 
@@ -78,13 +81,13 @@ docker compose start qq-agent
 ```bash
 # 未来若从浅克隆开始，先补全历史；fetch 不会覆盖工作区。
 if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
-  git fetch --unshallow --no-tags upstream-linux
+  git fetch --unshallow --no-tags upstream-official
 fi
-git fetch --no-tags upstream-linux refs/heads/main:refs/remotes/upstream-linux/main
-BASE=$(git merge-base main upstream-linux/main) || exit 1
-git log --oneline "$BASE"..upstream-linux/main
-git diff --stat "$BASE"..upstream-linux/main
-git diff "$BASE"..upstream-linux/main -- src/app.js src/config.js src/routes.js src/sender.js
+git fetch --no-tags upstream-official refs/heads/main:refs/remotes/upstream-official/main
+BASE=$(git merge-base main upstream-official/main) || exit 1
+git log --oneline "$BASE"..upstream-official/main
+git diff --stat "$BASE"..upstream-official/main
+git diff "$BASE"..upstream-official/main -- src/app.js src/config.js src/routes.js src/sender.js
 ```
 
 若找不到共同祖先或上游重写历史，停止普通合并，人工核对基线；不使用 `--allow-unrelated-histories` 掩盖问题。其他 QQ-agent 仓库可以研究或有选择移植，不默认当作本仓库的直接合并上游。
@@ -92,21 +95,30 @@ git diff "$BASE"..upstream-linux/main -- src/app.js src/config.js src/routes.js 
 ### 3 在集成分支解决冲突
 
 ```bash
-git switch -c integrate/upstream-YYYYMMDD main
-git merge --no-commit --no-ff upstream-linux/main
+git switch -c codex/upstream-YYYYMMDD main
+git merge --no-commit --no-ff upstream-official/main
 ```
 
 遇到冲突后逐项审阅 [本地保护清单](LOCAL-CUSTOMIZATIONS.md)，同时保留上游修复与本地行为。尤其检查：
 
 - 新文件仍在，但 `app.js`/`routes.js` 的挂载被覆盖，是典型“文件没丢、功能已失效”。
+- 控制台密码保留 8–256 位安全字符校验与默认长随机密码生成；不能恢复最低 24 位导致已有用户自定密码启动失败，也不能跳过空密码校验、Host/同源或 API/SSE 鉴权。改密需备份私有 `.env`、重建服务容器并核验新旧凭据，不记录实际密码。
 - `config.js` 回到单账号写盘、`api.provider` 被清空或新 URL 继承旧 Key，会造成串号或凭据泄漏。
 - 回复路由回到“发送时取群里最新消息”，会重现短时间多人 @ 时回复错人的问题。
+- 官方 QQ `off` 模式纯文本路径不自动拼接 `<@OpenID>` 或 `qqbot-at-user`，以避免已复现的原标签显示；这是当前实现选择，不代表所有纯文本 @ 均无协议支持。原生 @ 仅在用户选择 `qqbot.groupReplyMentionMode=markdown` 时使用明确的 msg_type=2 / markdown.content，并按固定成员在首条发送。明确的权限/指令拒绝才退回无标签纯文本；超时、5xx 不另发以免重复。保留锚点、规范化、冲突校验及 OneBot 原生段。禁止再用 SDK 替身 HTTP 200 宣称客户端已显示 @。
+- 用户明确选择 `legacy` 时保留旧 SDK 辅助方法和 @ 提示词，不走新 Markdown 分支；但必须保留后续裸 ID 复现修复：不再手工拼 `<@ID>`，模型行首标签先对照冻结成员规范化。`atUserId` 仍用于选择/校验，原 `msg_id` 和显式引用必须保留。19:29 的完整标签回退属于历史排查阶段，用户在复现后已要求修复，不得把该已知缺陷恢复为验收要求。其余机器人保持自己的模式，不整目录回退，也不把干净正文等同客户端原生 @ 已修复。
+- 已匹配的旧正常 @ 样本来自不含手拼标签的纯文本被动回复，裸 ID 样本来自旧应用额外拼接；两者不可混淆，更不能为补可见 @ 丢掉原 `msg_id` 路径。用户实测 Markdown 在其手机 QQ 正常、电脑 QQ 报不支持消息类型，当前已按要求关闭群 Markdown 模式。更新/重启不得自行重开；纯文本模式须保留成员路由及显式引用，不以伪 @ 字符串或重复补发来伪装兼容。
+- 发送诊断只解析 SDK 已序列化请求的白名单元数据，保持每客户端有界内存和异步隔离；不把原始 SDK 日志（含正文/身份/密钥）写到磁盘或状态接口。保留诊断失败不干扰发送及未知结果不补发边界，不能以 HTTP 200 推断客户端 @ 渲染。
 - 消息展示用 `#` 的兼容必须仍为“去掉单个前缀后精确命中当前会话”；不得改成省略号/前缀模糊匹配或错误时借用最新消息，入队与去重都须使用规范化 ID。
 - 引用图解析丢失、`atMe` 标记丢失、仅思考没有调用发送工具，是不同问题，不相互替代。
-- 可见回复提醒须同时覆盖当前消息查询后和零工具调用结束；仅对本轮直接 @/私聊、最多一次且不超出轮次上限。不得改成把思考原文直接发进 QQ，也不能对已经发过消息的轮次追加回复。
+- 可见回复提醒保留两个独立阶段：零工具/当前消息查询后的初始提醒一次，以及有新完成查询结果后的查询提醒一次（总计最多两次，且仍受轮次上限约束）。仅对本轮直接 @/私聊，查询范围限定联网查询和本条消息查询，调用 ID/名称须匹配；已有提醒后无新查询结果不再催促。任何发送尝试、明确 `finish`、未知工具/技能均阻止提醒，不能借此重试发送。不得把思考原文直接发进 QQ，也不能对已发送/主动运行追加回复。
 - 看板要展示未启用/缺依赖的具体原因，不把已有的 `404 { reason }` 简化成 HTTP 404，也不在点开看板时自动启用插件。
+- 群备注必须按机器人独立保存，仅用于控制台展示，保留 OpenID 路由/名单和提示词原语义；不能被新入站事件覆盖。接收诊断只能保留有界元数据，不能为了排障把未授权正文和发送者写入日志或把缺失记录当作平台未推送的证据。
+- 工具注册和序列化均保留对象根 schema 规范化；无参工具不能退回裸 `{}`，否则 DeepSeek 等严格端点会拒掉整轮聊天。基础连接测试是文本探测，不应宣称验证了技能工具/图片/QQ 收发。
 - 安装目录回到 `/app/skills`、恢复默认热重载、移除兼容链接，都要重新验证只读镜像。
 - 上游新增 CI、自动遥测、外部进程启动或网络预热需单独审核，不因为没有文本冲突就自动接受。
+
+主上游变化、官方文件新覆盖或扩展版本变化后，显式运行 `npm run upstream:inventory`，审阅生成清单；不可用它掩盖未经审查的核心覆盖。
 
 只暂存已审阅文件。`npm run audit:local` 读取的是 **Git 索引**，未 `git add` 的变更不会被当作待提交内容检查。有意移动文件时同步 `docs/local-overrides.json` 和测试，不自动批量删除保护项。
 
@@ -116,25 +128,34 @@ git merge --no-commit --no-ff upstream-linux/main
 npm ci --omit=dev --ignore-scripts
 npm run audit:local
 npm run test:local
+npm run test:upstream # 仅隔离测试环境；不会运行桌面安装器测试
 git diff --cached --check
 ```
 
 - `test:local` = 核心 Docker 测试 + ComfyUI 技能 + Steam 技能 + 维护检查；`npm test` 原本是平台测试，不等同此集合。
 - 普通回归使用临时目录、本地模型/QQ 替身，不需要真实 API Key，不调用真实 ComfyUI、不主动发 QQ 消息。
-- `audit:local` 检查关键文件/测试是否仍在索引、固定上游标签、禁止文件、明显密钥格式，以及当前 `.env` 中已知秘密是否误入索引。**它不是完整安全扫描，也不能判断功能语义**；仍需看 diff 和运行测试。
+- `audit:local` 检查关键文件/测试是否仍在索引、固定官方上游标签及祖先关系、官方文件覆盖层/扩展目录清单、禁止文件、明显密钥格式，以及当前 `.env` 中已知秘密是否误入索引。**它不是完整安全扫描，也不能判断功能语义**；仍需看 diff 和运行测试。
 - Mac 原生的上游 `platform-test` 含 Windows/Linux 平台假设；在 Linux 容器执行，不通过删断言掩盖。
 
 构建候选镜像并在 Linux 再测（先保留旧镜像标签，不会自动重建运行容器）：
 
 ```bash
-docker compose build qq-agent
+docker build -t qq-agent-docker:candidate .
 docker run --rm --read-only --network none \
-  --tmpfs /tmp:rw,nosuid,size=128m,mode=1777 \
-  -v "$PWD:/workspace:ro" -w /workspace --entrypoint sh qq-agent-docker:local \
-  -c 'node --test test/docker-*.test.mjs test/steam-deals.test.mjs test/comfy-draw.test.mjs && node test/platform-test.mjs'
+  --tmpfs /tmp:rw,nosuid,size=256m,mode=1777 \
+  -v "$PWD:/workspace:ro" --entrypoint sh qq-agent-docker:candidate -c '
+    set -eu
+    mkdir /tmp/qa
+    tar -C /workspace --exclude=./node_modules --exclude=./.git --exclude=./artifacts -cf - . | tar -C /tmp/qa -xf -
+    ln -s /app/node_modules /tmp/qa/node_modules
+    cd /tmp/qa
+    npm run test:local
+    npm run test:platform
+    npm run test:upstream
+  '
 ```
 
-这里挂载的是待测试源码，允许回归发现问题；还需检查运行镜像中的源文件与候选源码一致。测试目录可能在执行时创建本机临时文件，不应向生产 `/data` 写入测试配置。
+这里把只读待测试源码复制到临时目录，并复用镜像中的 Linux 依赖，避免宿主 node_modules 符号链接或原生模块干扰；还需检查运行镜像中的源文件与候选源码一致。所有测试文件落在隔离的 tmpfs，不应挂载生产 `/data`。
 
 ### 5 人工验收和上线
 
@@ -153,12 +174,12 @@ docker run --rm --read-only --network none \
 | Steam | 请求失败不是“零款成功”；Steam 本店史低标记正确 |
 | ComfyUI | 文生图/编辑/查任务/补发；不重复提交，不影响其他任务 |
 
-合并验收后提交集成结果，main 使用快进更新：
+初次迁移是新祖先线：保留旧 main 为 `codex/legacy-linux-main-20261013` 后，将经审计的新集成分支提升为 main，不做无关历史合并；`public` 分支不动。后续官方更新有共同祖先，main 使用快进更新：
 
 ```bash
 git commit -m "Merge reviewed upstream update and retain local Docker customizations"
 git switch main
-git merge --ff-only integrate/upstream-YYYYMMDD
+git merge --ff-only codex/upstream-YYYYMMDD
 ```
 
 然后按既有备份方案部署：`docker compose up -d --no-deps --no-build --wait --wait-timeout 90 qq-agent`。核对 healthy、QQ 连接、当前机器人/模型/技能、配置及 `.env` 哈希未被意外改写。部署成功与用户业务测试通过分别记录；不要移动原始两个基线标签，新增带日期的已验收标签。
@@ -181,5 +202,22 @@ git merge --ff-only integrate/upstream-YYYYMMDD
 3. 保留原作者、维护者、MIT LICENSE 和第三方依赖说明。用户选择完整镜像内置 connector；其 `UNLICENSED` 元数据和未核实再分发授权的状态必须明确保留，不能被项目 MIT 声明覆盖；模型许可另算。
 4. 不上传 `.env`、数据卷、聊天/图片、运行日志、敏感备份、真实 API Key、浏览器 Cookie。本文示例用 `APP_ID` 等占位，不填实际身份。
 5. 本地保留完整基线用于集成；公开仓库不推旧上游历史。公开快照使用 `audit:public`，不要为通过 `audit:local` 而向公开仓库推入敏感历史。
-6. 明确配置自己的 `origin`，只推 `public:main` 及指向公开提交的发行标签；不推本地集成 main、基线或备份标签，不对 `upstream-linux` 强推。
+6. 明确配置自己的 `origin`，只推 `public:main` 及指向公开提交的发行标签；不推本地集成 main、基线或备份标签，不对 `upstream-official` 或 `upstream-linux` 强推。
 7. 公布测试范围与限制，不把离线替身结果写成全平台实测。
+
+## ChatGPT2API 扩展接入保护（L19）
+
+合并后确认两个默认关闭技能仍被 Docker `COPY skills` 收入镜像，`modelCatalog` 导出仍被加载器透传，路由与 schema UI 均保留（仅保留工具文件会丢失「获取模型」按钮）。保留地址绑定密钥、手填模型/旧目录、任务去重与同会话媒体边界；不得将目录刷新改成生图探测或自动启用。
+本接入使用自托管 fork 的异步图片接口和固定搜索接口，不用官方 API 示例直接覆盖其协议；搜索可选模型仅用于整理结果。详见 `docs/CHATGPT2API.md`，接入后运行 `test/docker-chatgpt2api.test.mjs` 及完整本地/Linux 回归。
+
+## 聚合搜索保护（L20）
+
+更新后不可恢复 `engineFns={bingHtml,...}` 配合 `engines=bing,...` 的名称错配，也不能在 setup 中获取 `api.capability(...)` 的返回值当作函数。消费方应执行时 `await api.capability(name,args)`；GPT 来源名为 `search.chatgpt2api`，不是另一个抢占 `search.aggregate` 的提供者。
+保留 GPT 默认不参与、共享原技能凭据、并行/备用模式、独立预算/取消与失败状态；聚合不额外执行整理模型或在加载时联网。保留同引擎去重、HTTP(S) 来源与有界响应、检索增强生图的预算与改写开关。嵌套副本也须同步；不要借机覆盖外置技能或改写管理员配置。回归见 `docs/SEARCH-AGGREGATION.md` 与 `test/docker-search-aggregator.test.mjs`。
+
+
+## 扩展全量复验（L22）
+
+核心/扩展接口变动还需运行 `npm run test:extensions`；Linux 镜像内运行 `npm run test:platform` 与 `npm run test:upstream`。逐项覆盖范围见 `docs/extensions/validation.json`。旧官方离线测试的两条“拒绝一切非数字 ID”断言已改为 OpenID 保存/删除及空 ID 拒绝，保留数值 QQ 原有用例，并非删除失败测试。
+
+外置包代码不随镜像更新：只在完整备份后按清单更新指定包的 JS/manifest，核对旧哈希，拒绝覆盖未知改动；不得覆盖包内缓存、媒体、设置或其他包。回退时先停服务、恢复这两包的源码，再恢复旧镜像；不直接用旧卷覆盖上线后的新聊天。

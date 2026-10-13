@@ -287,7 +287,7 @@ export async function fetchModelsFrom(baseUrl, apiKey, timeoutMs = 15000) {
   return models;
 }
 
-/** 用用户提供的 baseUrl + apiKey + modelId 发送一次最小 chat 测试请求。 */
+/** 最小文本连接探测：不验证技能工具、图片或 QQ 收发，也不改运行配置。 */
 export async function testModelChat({ baseUrl, apiKey, model }) {
   const base = normalizeBaseUrl(baseUrl);
   if (!base) throw new Error('请先填写 Base URL');
@@ -323,7 +323,8 @@ export async function testModelChat({ baseUrl, apiKey, model }) {
       return { ok: false, httpStatus: res.status, latencyMs, note: '端点返回 HTTP 200，但不是有效的对话响应，请检查 Base URL、模型 ID 和服务协议。' };
     }
     const reply = String(body?.choices?.[0]?.message?.content ?? '').trim().slice(0, 60);
-    return { ok: true, httpStatus: res.status, latencyMs, note: reply ? `模型回复：「${reply}」` : '请求成功（无文本返回）' };
+    return { ok: true, scope: 'text-only', httpStatus: res.status, latencyMs,
+      note: `${reply ? `模型回复：「${reply}」` : '请求成功（无文本返回）'}\n仅验证基础文本连接，未验证技能工具调用、图片或 QQ 收发。` };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
     const msg = String(error?.cause?.message ?? error?.message ?? error);

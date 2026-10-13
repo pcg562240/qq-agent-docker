@@ -6,6 +6,9 @@ function connectSSE() {
   // EventSource 连不上会无限重连刷屏，直接短路。
   if (state.preview) return;
   const es = new EventSource('/api/events');
+  es.addEventListener('chat-names', () => {
+    if (!isPeerView()) refreshChatNames().catch(() => {});
+  });
   es.addEventListener('session-start', () => {
     if (isPeerView()) return;   // 统一控制台：查看对端时不混入本机会话事件
     loadSessions();
@@ -571,6 +574,7 @@ function renderSessionDetail(s) {
   html.push(`
     <div class="detail-header">
       <h2>${esc(chatName)} ${replyFreqChip(s.chatKey)} ${statusBadge}
+        ${s.chatKey.startsWith('group:') ? '<button class="btn btn-small" id="session-alias-btn">群备注</button>' : ''}
         <button class="btn btn-small" id="json-mode-btn" style="margin-left:10px">JSON 模式</button>
         ${canDelete ? `<button class="btn btn-small btn-danger" id="session-delete-btn" style="margin-left:6px" title="删除这条会话记录">删除</button>` : ''}
       </h2>
@@ -676,6 +680,7 @@ function renderSessionDetail(s) {
   detail.innerHTML = html.join('');
   detail.querySelectorAll('details.collapsible').forEach((d, i) => { if (openStates.has(i)) d.open = openStates.get(i); });
   const jsonBtn = $('#json-mode-btn');
+  $('#session-alias-btn')?.addEventListener('click', () => editGroupAlias(s.chatKey));
   if (jsonBtn) jsonBtn.addEventListener('click', () => {
     state.sessionJsonMode = state.sessionJsonMode === s.id ? null : s.id;
     lastDetailFp = null;   // 强制重渲染

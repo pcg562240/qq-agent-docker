@@ -68,13 +68,14 @@ export class IngestWorker {
         }
       } catch { /* 软失败继续重试 */ }
       retries++;
-      if (this.running && retries <= 20) setTimeout(tryIndexes, 5000);
+      if (this.running && retries <= 20) { this.indexTimer = setTimeout(tryIndexes, 5000); this.indexTimer.unref?.(); }
     };
     tryIndexes();
     this.timer = setInterval(() => { this.tick().catch(() => {}); }, this.intervalMs);
     this.timer.unref?.();
     // 首轮尽快：慢启动 1s 后先跑一遍，避免刚部署时等一个完整 interval
-    setTimeout(() => { this.tick().catch(() => {}); }, 1000);
+    this.firstTimer = setTimeout(() => { this.tick().catch(() => {}); }, 1000);
+    this.firstTimer.unref?.();
   }
 
   /* ── 任务 tick ─────────────────────────────────────────────────────── */
@@ -230,6 +231,7 @@ export class IngestWorker {
 
   /* ── 停 ────────────────────────────────────────────────────────────── */
   async stop() {
+    clearTimeout(this.indexTimer); clearTimeout(this.firstTimer);
     this.running = false;
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     if (this.promoteTimer) { clearInterval(this.promoteTimer); this.promoteTimer = null; }

@@ -78,7 +78,7 @@ export const DEFAULT_CONFIG = {
     temperature: 0.8,
     maxRounds: 12,                          // 单次运行的最多工具轮数
     timeoutMs: 180000,
-    // 思考强度（设置页-模型 API 区的口径；实际落成各厂商参数由 thinking-adapters 插件负责）：
+    // 思考强度（设置页-模型 API 区的口径；默认由官方内置 thinking.js 处理；已有生效的 thinking-adapters 保持原配置优先）：
     //   thinkingMode   off/auto/on —— off=能思考的模型也明确关闭，on=按渠道发开启参数
     //   thinkingEffort low/medium/high —— 推理强度，仅 OpenAI o 系 / OpenRouter 生效
     //   thinkingBudget token 数 —— 思考预算，仅 Claude 兼容 / 部分网关生效，0=不指定
@@ -188,7 +188,8 @@ export const DEFAULT_CONFIG = {
     }
   },
   channel: { type: 'onebot' },
-  qqbot: { enabled: true, appId: '', clientSecret: '', requireMention: true, markdown: false },
+  // legacy: historical SDK helpers, with leaked plain-text mention tags removed.
+  qqbot: { enabled: true, appId: '', clientSecret: '', requireMention: true, markdown: false, groupReplyMentionMode: 'off' },
   // SnowLuma / OneBot v11
   snowluma: {
     dir: '',                   // SnowLuma 程序目录；留空 = 自动探测项目内 ./snowluma
@@ -330,6 +331,8 @@ export const DEFAULT_CONFIG = {
   },
   // 存储
   store: {
+    // Official 0.4 prefix anchor; merged defaults never overwrite saved settings.
+    promptAnchor: { enabled: true, maxExtraRead: 5 },
     // 单群 JSON 最大保留条数。**0 = 不限制**。
     // 用户明确要求取消上限（原为 2000）。配套措施：
     //   - 前端存档页已分页（首屏 500 条、滚动追加 200 条），不会因数据多而卡

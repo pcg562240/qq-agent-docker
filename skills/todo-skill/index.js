@@ -1,3 +1,5 @@
+import { memberId, appendContext } from '../../src/extension-context.js';
+import { randomUUID } from 'node:crypto';
 // todo-skill —— LLM 型技能：待办状态机（宿主 pending.js 语义照搬）
 // 工具面：宿主 tools.js 的 memory_todo_save / memory_todo_done。
 // 到期自动消失、同会话同文去重、绑人待办仅该人出现才注入、上限 40 条/单条 100 字/过期上限 7 天。
@@ -14,14 +16,14 @@ let cfg = () => ({});
 let dataDir = null;
 
 const MAX = 40;
-function file() { return path.join(dataDir || (process.cwd() + '/data/todo-skill'), 'pending-todos.json'); }
+function file() { return path.join(dataDir || path.join(DATA_DIR, 'todo-skill'), 'pending-todos.json'); }
 function read() {
   try {
     let t = fs.readFileSync(file(), 'utf8');
     if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
     const j = JSON.parse(t);
     return Array.isArray(j.todos) ? j.todos : [];
-  } catch { return []; }
+  } catch (e) { if (e.code === "ENOENT") return []; throw e; }
 }
 function write(todos) {
   const now = Date.now();
@@ -30,9 +32,8 @@ function write(todos) {
     fs.mkdirSync(path.dirname(file()), { recursive: true });
     const tmp = file() + '.' + process.pid + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify({ version: 1, todos: alive }, null, 1), 'utf8');
-    try { fs.unlinkSync(file()); } catch {}
     fs.renameSync(tmp, file());
-  } catch {}
+  } catch (e) { throw new Error("待办保存失败", { cause: e }); }
   return alive;
 }
 
@@ -44,10 +45,11 @@ export function saveTodo({ chatKey, text, expireInMinutes = 120, userId = '', no
   mins = Math.min(7 * 24 * 60, Math.round(mins));
   const now = Date.now();
   const todos = read();
-  const uid = String(userId || '').replace(/^-?\d{5,15}$/, (m) => String(Math.abs(Number(m))));
-  const fixedUid = /^\d{1,15}$/.test(uid) ? uid : '';
-  const key = String(chatKey || '') + '|' + body.toLowerCase();
-  const existing = todos.find((t) => (String(t.chatKey || '') + '|' + String(t.text).toLowerCase()) === key);
+  const fixedUid = memberId(userId);
+  if (String(userId || '').trim() && !fixedUid) return { ok: false, error: 'userId 必须是完整 QQ 号或 OpenID' };
+  if (!/^(group|private):[^:]+$/.test(chatKey || '')) return { ok: false, error: '缺少当前会话' };
+  const key = String(chatKey || '') + '|' + fixedUid + '|' + body.toLowerCase();
+  const existing = todos.find((t) => (String(t.chatKey || '') + '|' + String(t.userId || '') + '|' + String(t.text).toLowerCase()) === key);
   if (existing) {
     existing.expiresAt = now + mins * 60000;
     existing.updatedAt = now;
@@ -57,7 +59,7 @@ export function saveTodo({ chatKey, text, expireInMinutes = 120, userId = '', no
     return { ok: true, todo: existing, deduped: true };
   }
   const todo = {
-    id: 't' + now.toString(36), chatKey: String(chatKey || ''), userId: fixedUid,
+    id: 't' + randomUUID(), chatKey: String(chatKey || ''), userId: fixedUid,
     text: body, note: String(note || '').slice(0, 80),
     createdAt: now, updatedAt: now, expiresAt: now + mins * 60000, expireInMinutes: mins,
   };
@@ -135,5 +137,24 @@ export function available() {
 export function activate(ctx) {
   dataDir = path.join(DATA_DIR, 'todo-skill');
 }
-export function deactivate(ctx) {}
-export function dispose() {}
+export function deactivate(ctx) { pending.clear(); }
+export function dispose() { pending.clear(); }
+
+const pending = new Map();
+export const hooks = {
+  'before-context'({ chatKey, sessionId, triggerEntries = [] }) {
+    const people = new Set(triggerEntries.filter(e => !e.self).map(e => String(e.senderId)));
+    const rows = read().filter(t => t.chatKey === chatKey && (!t.expiresAt || t.expiresAt > Date.now()) && (!t.userId || people.has(t.userId)));
+    const key = sessionId || chatKey;
+    pending.delete(key);
+    if (rows.length) {
+      if (pending.size >= 100) pending.delete(pending.keys().next().value);
+      pending.set(key, rows.map(t => t.text).join('\n').slice(0, 4000));
+    }
+  },
+  'before-llm-messages'({ chatKey, sessionId, messages }) {
+    const key = sessionId || chatKey;
+    const text = pending.get(key); pending.delete(key);
+    appendContext(messages, '本会话待办', text);
+  },
+};

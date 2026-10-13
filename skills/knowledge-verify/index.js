@@ -1,3 +1,4 @@
+import { capabilityCall, requesterId } from '../../src/extension-context.js';
 // knowledge-verify —— LLM 型技能：知识库工具面（宿主 tools.js 的 kb_recall/kb_write/kb_crawl 照搬）
 //
 // 软依赖：api.capability('knowledge.recall' / 'knowledge.agent-write' / 'knowledge.crawl')
@@ -8,11 +9,11 @@ import { imagesFromMessage, toKbImage } from './lib/image-source.js';
 
 export function setup(api) {
   // 软依赖取用（有就拿到，没有就是 undefined；抛错也被吞掉）
-  const recallFn = api.capability('knowledge.recall');
-  const writeFn = api.capability('knowledge.agent-write');
-  const crawlFn = api.capability('knowledge.crawl');
+  const recallFn = capabilityCall(api, 'knowledge.recall');
+  const writeFn = capabilityCall(api, 'knowledge.agent-write');
+  const crawlFn = capabilityCall(api, 'knowledge.crawl');
   // 取图要联网下载（api.fetch 需 manifest 声明 permissions: ["web_fetch"]）
-  const fetchImpl = typeof api.fetch === 'function' ? api.fetch : globalThis.fetch;
+  const fetchImpl = api.safeFetchBinary;
 
   const ok = (data) => ({ content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) });
   const err = (msg) => ({ content: msg, isError: true });
@@ -33,7 +34,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!recallFn) return err('知识库插件未启用（plugins/kb-growth 没装或不可用），无法检索。可改用 web_search。');
+        if (!api.hasCapability('knowledge.recall')) return err('知识库插件未启用（plugins/kb-growth 没装或不可用），无法检索。可改用 web_search。');
         const query = String(args.query ?? '').trim();
         if (!query) return err('要指定 query');
         const r = await recallFn({ query, chatKey: ctx.chatKey, topK: Math.min(8, Math.max(1, Number(args.topK) || 5)) });
@@ -71,7 +72,7 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!writeFn) return err('知识库插件未启用，无法写入。');
+        if (!api.hasCapability('knowledge.agent-write')) return err('知识库插件未启用，无法写入。');
         const action = String(args.action ?? '').trim().toLowerCase() === 'append' ? 'append' : 'create';
         // 采集消息里的图片：image_message_ids → 存档取图 → 下载/读取字节（宿主 messageImageBuffers 的 V0.3.1 等价实现）
         let images = [];
@@ -94,7 +95,7 @@ export function setup(api) {
           targetTitle: String(args.target_title ?? '').trim() || null,
           sourceUrl: String(args.source_url ?? '').trim(),
           images,
-          requester: ctx.requesterId,
+          requester: requesterId(ctx),
           chatKey: ctx.chatKey,
         });
         if (!r.ok) return err(r.error);
@@ -136,14 +137,14 @@ export function setup(api) {
     },
     async execute(ctx, args) {
       try {
-        if (!crawlFn) return err('知识库插件未启用，无法爬取。');
+        if (!api.hasCapability('knowledge.crawl')) return err('知识库插件未启用，无法爬取。');
         const url = String(args.url ?? '').trim();
         if (!url || !/^https?:\/\//i.test(url)) return err('url 必须是 http/https 链接');
         const r = await crawlFn({
           url,
           title: String(args.title ?? '').trim(),
           maxImages: Math.min(8, Math.max(1, Number(args.max_images) || 3)),
-          requester: ctx.requesterId,
+          requester: requesterId(ctx),
           chatKey: ctx.chatKey,
         });
         if (!r.ok) return err(r.error);

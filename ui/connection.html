@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>连接设置 · QQ Agent Docker</title>
+<link rel="stylesheet" href="/group-alias.css"><script defer src="/group-alias.js"></script>
 <link rel="icon" href="/favicon.ico?v=20261011" type="image/x-icon" sizes="16x16 24x24 32x32 48x48 64x64 128x128 256x256">
 <link rel="icon" type="image/png" href="/favicon.png?v=20261011" sizes="256x256">
 <link rel="apple-touch-icon" href="/favicon.png?v=20261011"><link rel="stylesheet" href="/connection.css"><script src="/connection.js" type="module"></script></head>
@@ -46,18 +47,18 @@
 <label>API Base URL<input id="baseUrl" type="url" placeholder="https://你的服务地址/v1"></label>
 <label>API Key<input id="apiKey" type="password" autocomplete="new-password" placeholder="留空保留已有密钥"></label>
 <label>模型名称<input id="model" autocomplete="off" placeholder="点击获取模型列表，或手动填写模型 ID"></label>
-<div class="actions model-actions"><button id="model-fetch" type="button" class="secondary" disabled>获取模型列表</button><button id="model-test" type="button" class="secondary" disabled>连接测试</button></div>
+<div class="actions model-actions"><button id="model-fetch" type="button" class="secondary" disabled>获取模型列表</button><button id="model-test" type="button" class="secondary" disabled>基础连接测试</button></div>
 <label id="model-list-label" hidden>服务返回的模型<select id="model-list" aria-label="服务返回的模型"></select></label>
 <div class="actions model-actions"><button id="model-save" type="button" class="secondary" disabled>只保存，不启用</button><button id="model-save-use" type="button" disabled>保存并启用</button></div>
 <p id="model-message" role="status" aria-live="polite"></p>
-<p class="muted small">连接测试会消耗少量模型额度，不向 QQ 发送消息。不支持获取列表的服务可手动填写模型 ID。切换主模型时，视觉 / 视频专用模型等高级设置保持不变。</p>
+<p class="muted small">基础连接测试仅验证文本请求，不验证技能工具调用、图片或 QQ 收发；会消耗少量模型额度。不支持获取列表的服务可手动填写模型 ID。切换主模型时，视觉 / 视频专用模型等高级设置保持不变。</p>
 <p class="muted small">使用 OpenAI 兼容协议。Mac 本机的模型服务在容器内通常使用 host.docker.internal，而不是 localhost。</p></section>
 <section><h2>03 · 可用私聊</h2><label>允许的用户 OpenID<textarea id="private" placeholder="每行一个 OpenID"></textarea></label>
 <p class="muted small">默认不开放任何会话。先向机器人发一句消息，在下方发现列表中添加，再重新发消息。</p></section>
 <section><h2>04 · 可用群聊</h2><label>允许的群 OpenID<textarea id="groups" placeholder="每行一个群 OpenID，不是数字 QQ 群号"></textarea></label>
 <p class="muted small">仅在机器人具有加群权限时有效。入群后 @ 一次，群标识会出现在下方。无需 @ 模式还受完整控制台的响应档位限制。</p></section>
 <section class="wide"><h2>最近发现的会话</h2><div id="peers" class="muted">暂无。等待 QQ 推送事件后可添加白名单。</div>
-<p class="muted small">这里仅列已观察到的会话，不是完整好友或群列表。未授权会话只记录标识，不存聊天正文、不调用模型。</p></section>
+<p class="muted small">这里仅列已观察到的会话，不是完整好友或群列表。可设置本地群备注，不修改 QQ 群名。接收记录仅保留近期处理状态，不保存正文或发送者；旧版本记录不会补录。未授权会话不存聊天正文、不调用模型。</p></section>
 </div><div class="actions"><button id="save" type="submit">保存并应用</button><button id="refresh" type="button" class="secondary">刷新连接状态</button><button id="logout" type="button" class="secondary">退出登录</button></div>
 <p id="message" role="status"></p></form><p class="muted small">OneBot 模式请在 .env 设置 QQ_AGENT_CHANNEL=onebot 和外部服务地址，然后重新创建容器。本镜像不包含 NapCat / SnowLuma。</p>
 </main>

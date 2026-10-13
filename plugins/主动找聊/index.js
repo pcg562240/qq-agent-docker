@@ -28,12 +28,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chatCompletion } from '../../src/llm.js';
-import { DATA_DIR } from '../../src/config.js';
+import { DATA_DIR, getConfig } from '../../src/config.js';
 
 let api = null;            // setup() 注入的 api（config/log/utils）
 let sender = null;         // activate() 注入的宿主 sender
 let onebot = null;         // activate() 注入（查群列表/历史消息）
 let timer = null;
+let generation = 0;
+let active = false;
+let busy = false;
 let state = { last: {}, dayCount: {}, lastAnyAt: 0 };
 let statePath = '';
 let groupCache = { list: null, at: 0 };   // auto 类型判定用，缓存 10 分钟
@@ -93,11 +96,11 @@ async function resolveChatKey(t) {
   try {
     if (!groupCache.list || Date.now() - groupCache.at > 10 * 60_000) {
       const r = await onebot?.call?.('get_group_list', {});
-      groupCache.list = Array.isArray(r?.data) ? r.data.map((g) => String(g.group_id)) : [];
+      groupCache.list = (Array.isArray(r) ? r : Array.isArray(r?.data) ? r.data : []).map(g => String(g.group_id));
       groupCache.at = Date.now();
     }
-  } catch { /* 查询失败按私聊处理 */ }
-  return groupCache.list.includes(t.qq) ? `group:${t.qq}` : `private:${t.qq}`;
+  } catch { throw new Error('无法判定目标类型，请明确选择群或私聊'); }
+  return (groupCache.list || []).includes(t.qq) ? `group:${t.qq}` : `private:${t.qq}`;
 }
 
 /* ── 安静时段 / 每日上限 / 冷却 ────────────────────────────────────────── */
@@ -117,14 +120,14 @@ async function hadRecentActivity(chatKey, silenceMin) {
   if (chatKey.startsWith('private:')) return false;             // 私聊无历史接口，按无动静
   try {
     const r = await onebot?.call?.('get_group_msg_history', { group_id: chatKey.split(':')[1], limit: 1, message_seq: 0 });
-    const list = Array.isArray(r?.data?.messages) ? r.data.messages : Array.isArray(r?.data) ? r.data : [];
+    const list = Array.isArray(r?.messages) ? r.messages : Array.isArray(r?.data?.messages) ? r.data.messages : Array.isArray(r) ? r : [];
     const last = list
       .filter((m) => m && Number(m.user_id) !== 0)
       .map((m) => Number(m.time || m.timestamp || 0))
       .find((ts) => ts > 0);
     if (!last) return false;
     return Date.now() / 1000 - last < silenceMin * 60;
-  } catch { return false; }
+  } catch { return true; }
 }
 
 /* ── 文案 ─────────────────────────────────────────────────────────────── */
@@ -159,17 +162,24 @@ async function composeOpener(t) {
 
 /* ── 发送 ─────────────────────────────────────────────────────────────── */
 async function sendTo(chatKey, text, why) {
-  if (!sender || !text) return;
+  if (!active || !conf().enable || !sender || !text) return;
+  const [kind, id] = chatKey.split(':');
+  const host = getConfig();
+  const allow = kind === 'group' ? host.allow?.groups : host.allow?.private;
+  const deny = kind === 'group' ? host.deny?.groups : host.deny?.private;
+  if (!(allow || []).map(String).includes(id) || (deny || []).map(String).includes(id)) return false;
   const now = Date.now();
   if (now - state.lastAnyAt < MIN_GLOBAL_GAP_MS) return;         // 全局防连发（兜底）
   state.lastAnyAt = now;
+  saveState();
   try {
     await sender.sendTextBatch(chatKey, text);
     api?.log?.(`已主动找聊 ${chatKey}（${why}）: ${text.slice(0, 24)}`);
     return true;
   } catch (e) {
     api?.error?.(`发送失败 ${chatKey}: ${e?.message ?? e}`);
-    state.lastAnyAt = 0;                                          // 失败不占用全局冷却
+    // Unknown delivery still consumes cooldown; do not auto-resend.
+    // state.lastAnyAt = 0;                                          // 失败不占用全局冷却
     return false;
   }
 }
@@ -186,9 +196,9 @@ function loadState() {
 }
 
 function saveState() {
-  try {
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');
-  } catch (e) { /* 持久化失败不致命 */ }
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(statePath + '.tmp', JSON.stringify(state, null, 2), 'utf8');
+  fs.renameSync(statePath + '.tmp', statePath);
 }
 
 /* ── 主循环 ───────────────────────────────────────────────────────────── */
@@ -214,7 +224,9 @@ async function tick() {
     if (c.respectRecentReply && await hadRecentActivity(await resolveChatKey(t), c.recentReplySilenceMin)) continue;
 
     const chatKey = await resolveChatKey(t);
+    const epoch = generation;
     const text = await composeOpener(t);
+    if (epoch !== generation || !active) return;
     const ok = await sendTo(chatKey, text, '目标到点');
     if (ok && now.getTime() - last >= gapMs) {
       state.last[key] = now.getTime();
@@ -227,6 +239,7 @@ async function tick() {
   // 2) 定时任务：到点直发（固定文本，不走 LLM）
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const task of c.scheduledTasks) {
+    if (task.enabled === false) continue;
     if (String(task.time) !== hhmm) continue;
     const day = todayKey(now);
     const taskKey = `${task.time}|${task.qq}|${day}`;
@@ -243,21 +256,24 @@ export function setup(injected) {
 }
 
 export function activate(ctx) {
+  active = true; generation++;
   sender = ctx?.sender || null;
   onebot = ctx?.onebot || null;
   loadState();
   if (timer) return;
   const loop = () => {
     timer = setTimeout(loop, TICK_MS);
-    try { tick().catch((e) => api?.error?.(`tick 异常: ${e?.message ?? e}`)); } catch (e) { /* tick 内部已兜底 */ }
+    try { if (!busy) { busy = true; tick().catch(() => api?.error?.('主动找聊运行失败')).finally(() => { busy = false; }); } } catch (e) { /* tick 内部已兜底 */ }
   };
   timer = setTimeout(loop, 8_000);   // 首次 8s（避开启动高峰）
   api?.log?.('主动找聊已启动（60s 轮询；默认全关，配置里 enable 后才发消息）');
 }
 
 export function deactivate() {
+  active = false; generation++;
   if (timer) clearTimeout(timer);
   timer = null;
   sender = null;
   onebot = null;
 }
+export const dispose = deactivate;

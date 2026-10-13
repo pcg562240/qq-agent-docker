@@ -44,7 +44,7 @@ function writeThreads(chatKey, threads) {
   try {
     fs.writeFileSync(tmp, JSON.stringify({ chatKey: String(chatKey), updatedAt: Date.now(), threads: threads.slice(0, MAX_PER_CHAT) }, null, 1), 'utf8');
     fs.renameSync(tmp, file);
-  } catch (e) { api?.log?.('threads: 写盘失败 ' + (e?.message ?? e)); }
+  } catch (e) { throw new Error("讨论线写盘失败", { cause: e }); }
 }
 
 export const providers = {
@@ -93,6 +93,7 @@ export function available() {
   };
 }
 
+export function deactivate() { pendingBySession.clear(); }
 export function dispose() { pendingBySession.clear(); }
 
 export const hooks = {
@@ -100,19 +101,19 @@ export const hooks = {
    * 注入前先算好（此时能拿到 chatKey / session）；
    * 真正改 messages 在 before-llm-messages（那个钩子拿不到 chatKey）。
    */
-  'before-context'({ chatKey, session, triggerEntries } = {}) {
+  'before-context'({ chatKey, sessionId, triggerEntries } = {}) {
     try {
       if (cfg().inject === false) return;
       const key = String(chatKey || '');
       if (!key) return;
-      const sid = String(session?.id || key);
+      const sid = String(sessionId || key);
       const threads = readThreads(key);
       if (!threads.length) { pendingBySession.delete(sid); return; }
 
       // 用本批消息给线索"计温"：出现同一 topic 的词就刷新活跃度
       const text = (Array.isArray(triggerEntries) ? triggerEntries : []).map((e) => String(e?.text ?? '')).join('\n');
+      let changed = false;
       if (text) {
-        let changed = false;
         const next = threads.map((t) => {
           const topicHit = t.topic && text.includes(String(t.topic).slice(0, 6));
           const tagHit = (t.tags || []).some((g) => g && text.includes(String(g)));
@@ -130,14 +131,15 @@ export const hooks = {
       });
       const block = renderThreads(sel);
       if (!block) { pendingBySession.delete(sid); return; }
+      if (pendingBySession.size >= 100) pendingBySession.delete(pendingBySession.keys().next().value);
       pendingBySession.set(sid, { block, ids: sel.active.map((x) => x.thread.id), chatKey: key });
     } catch (e) { api?.log?.('threads: before-context 失败 ' + (e?.message ?? e)); }
   },
 
   /** 把【聊到一半的线索】段插到系统消息里（追加到已有 system 内容末尾，不新建消息）。 */
-  'before-llm-messages'({ messages, session } = {}) {
+  'before-llm-messages'({ messages, sessionId, chatKey } = {}) {
     try {
-      const sid = String(session?.id || '');
+      const sid = String(sessionId || chatKey || '');
       const pend = pendingBySession.get(sid);
       if (!pend || !Array.isArray(messages)) return;
       const sys = messages.find((m) => m?.role === 'system');

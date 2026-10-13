@@ -37,8 +37,8 @@ export function reportRunCost(chatKey, { promptTokens = 0, cachedTokens = 0 } = 
   const guard = cfg?.api?.costGuard || {};
   if (guard.enabled === false) return { reduced: false, reason: 'off', dayPrompt: 0 };
 
-  const dayMax = Math.max(0, Number(guard.dayPromptMax) ?? 800000); // 0=不限
-  const chatMax = Math.max(0, Number(guard.chatPromptMax) ?? 200000);
+  const dayMax = Math.max(0, (Number.isFinite(Number(guard.dayPromptMax)) ? Number(guard.dayPromptMax) : 800000)); // 0=不限
+  const chatMax = Math.max(0, (Number.isFinite(Number(guard.chatPromptMax)) ? Number(guard.chatPromptMax) : 200000));
 
   let data = read();
   if (data.day !== today()) {
@@ -66,7 +66,7 @@ export function reportRunCost(chatKey, { promptTokens = 0, cachedTokens = 0 } = 
 export function shouldReduceOptionalInjects(cfg) {
   const guard = cfg?.api?.costGuard || {};
   if (guard.enabled === false) return { reduce: false, reason: 'off' };
-  const dayMax = Math.max(0, Number(guard.dayPromptMax) ?? 800000);
+  const dayMax = Math.max(0, (Number.isFinite(Number(guard.dayPromptMax)) ? Number(guard.dayPromptMax) : 800000));
   const data = read();
   if (data.day !== today()) return { reduce: false, reason: 'new-day' };
   if (dayMax > 0 && Number(data.totalPrompt) >= dayMax * 0.85) {

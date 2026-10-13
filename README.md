@@ -1,16 +1,22 @@
 # QQ Agent Docker · 官方 QQ 机器人接入版
 
-基于 [prolet1966/QQ-Agent-for-Linux](https://github.com/prolet1966/QQ-Agent-for-Linux) 的无界面 Node.js 服务改造，保留 Agent、聊天记录、记忆与 Web 控制台，新增 **QQ 龙虾扫码授权 / 手动凭据接入**。使用腾讯官方机器人 API，不托管个人 QQ 客户端；扫码自动取得凭据，不要求用户手填 AppID / AppSecret。
+以 [K0nd1us/QQ-agent 官方 Git 源码](https://github.com/K0nd1us/QQ-agent) 为主上游，独立维护 Docker／官方 QQ 适配层与扩展。承接早期 Linux 移植的必要兼容代码，提供无界面 Node.js 服务，保留 Agent、聊天记录、记忆与 Web 控制台，新增 **QQ 龙虾扫码授权 / 手动凭据接入**。使用腾讯官方机器人 API，不托管个人 QQ 客户端；扫码自动取得凭据，不要求用户手填 AppID / AppSecret。
 
 **当前是可运行的首版 MVP，不是全功能桌面版等价移植。** 镜像不安装 QQ、Electron、NapCat 或 SnowLuma，不依赖 OpenClaw / QwenPaw，也不需要图形桌面、注入权限、特权容器或修改宿主机 sysctl。
 
 ## 本地定制与上游更新
 
-更新代码前先读 [本地改动清单](docs/LOCAL-CUSTOMIZATIONS.md) 和 [上游更新维护流程](docs/UPSTREAM-MAINTENANCE.md)。本分支包含多机器人与模型切换、引用图片和并发回复修复、只读 Docker 扩展安装及技能适配，不能用上游压缩包直接覆盖。源码基线记录在维护清单中；维护者的本地集成仓库另用标签 `upstream-linux-base-20261007` 固定，公开仓库不包含该旧历史。运行数据和秘密不在 Git 中。
+更新代码前先读 [本地改动清单](docs/LOCAL-CUSTOMIZATIONS.md) 和 [上游更新维护流程](docs/UPSTREAM-MAINTENANCE.md)。本分支包含多机器人与模型切换、引用图片和并发回复修复、只读 Docker 扩展安装及技能适配，不能用上游压缩包直接覆盖。源码基线记录在维护清单中；维护者的本地集成仓库另用标签 `upstream-official-base-20261013` 固定，旧 Linux 历史只用于溯源，公开仓库仍采用干净发布历史。运行数据和秘密不在 Git 中。
 
 维护入口：从本公开仓库 clone 后使用 `npm run audit:public` 检查关键文件及 Git 索引；维护者的完整本地集成仓库使用 `npm run audit:local`，额外核对基线标签。`npm run test:local` 运行完整本地回归。已有的 `test:docker` 只包含核心 Docker 测试，不包含两个定制技能测试。
 
-## 预构建 Docker 镜像（推荐）
+本地源码新增 [ChatGPT2API 生图/编辑与搜索技能](docs/CHATGPT2API.md)，支持模型目录获取和手填模型 ID，默认关闭。需要构建包含该改动的镜像；本文列出的旧预构建发行版不因此自动包含新功能。
+
+## 当前源码基线
+
+官方 Git 基线为 `11577ba`，当前应用包版本已与主上游统一为 **`0.4.0`（V0.4 系列）**。Docker／官方 QQ 适配层通过独立提交与发行修订追踪，扩展保留各自版本号。详见 [官方上游迁移记录](docs/OFFICIAL-UPSTREAM-MIGRATION.md) 与 [扩展独立维护](docs/extensions/README.md)。迁移源码不等于已部署或已发布；以下预构建镜像仍是先前发行版。
+
+## 先前发行的预构建 Docker 镜像
 
 - GitHub：[pcg562240/qq-agent-docker](https://github.com/pcg562240/qq-agent-docker)
 - 镜像：`ghcr.io/pcg562240/qq-agent-docker:0.4.7-docker.1`，提供 `linux/amd64` 与 `linux/arm64`。
@@ -44,7 +50,7 @@ docker compose ps
 
 打开 [本机控制台](http://127.0.0.1:3210)。控制台密码是本项目 `.env` 中的 `QQ_AGENT_CONSOLE_TOKEN`，初始化脚本会生成随机密码；不要公开该文件或把密钥贴进聊天。
 
-没有本机 Node.js 时，可复制 `.env.example` 为 `.env`，自行填写随机的控制台密码：24–256 位字母、数字、下划线或连字符；之后仅用 Docker 构建运行即可。
+没有本机 Node.js 时，可复制 `.env.example` 为 `.env`，自行填写控制台密码：8–256 位字母、数字、下划线或连字符，建议至少 24 位随机密码；之后仅用 Docker 构建运行即可。修改现有 `.env` 后需重建服务容器以加载新环境变量（不是重新构建镜像）：`docker compose up -d --no-deps --no-build qq-agent`；旧密码及旧登录 Cookie 随之失效，机器人数据卷保留。
 
 ### 首次配置
 
@@ -226,9 +232,9 @@ docker run --rm --init --read-only --network none \
 
 ## 来源与许可
 
-- 直接基线：[QQ-Agent-for-Linux](https://github.com/prolet1966/QQ-Agent-for-Linux)，提交 `da6f0560c1c7530a985bb4c1542a88cae104b80e`，包版本 `0.4.7`。
+- 历史 Linux 来源（不再作为主上游）：[QQ-Agent-for-Linux](https://github.com/prolet1966/QQ-Agent-for-Linux)，提交 `da6f0560c1c7530a985bb4c1542a88cae104b80e`，包版本 `0.4.7`。
 - QQ 官方 SDK：[tencent-connect/qqbot-nodejs](https://github.com/tencent-connect/qqbot-nodejs)，版本 `1.0.4`。
 - 扫码参考：[QwenPaw QQQRCodeAuthHandler](https://github.com/agentscope-ai/QwenPaw/blob/2744a976b39452ed612829ea041babaecade72fb/src/qwenpaw/app/channels/qrcode_auth_handler.py#L704-L819)；实际调用 [腾讯 OpenClaw 插件同款 connector](https://github.com/tencent-connect/openclaw-qqbot/blob/main/src/setup/login.ts)。依赖版本固定于 lockfile，第三方包遵循各自许可；connector 1.2.0 包元数据标记 `UNLICENSED`，项目 MIT 许可不覆盖该包。
 - 原作者与 Linux 维护者的署名及 MIT 许可保留，见 `LICENSE` 和 `package.json`。
 - 原 Linux 安装说明留在 [UPSTREAM-LINUX-README](docs/UPSTREAM-LINUX-README.md)，其中桌面 QQ、SnowLuma、ptrace 配置 **不适用于本 Docker 官方通道**。
-- 本地新增 Docker 接入层不是腾讯或上游项目发布的正式发行版；保留 `0.4.7` 作为基线版本，不表示上游已经发布这些改动。
+- 本地新增 Docker 接入层不是腾讯或上游项目发布的正式发行版；应用包版本 `0.4.0` 跟随官方源码，不表示上游已经发布本地 Docker／官方 QQ 适配改动。

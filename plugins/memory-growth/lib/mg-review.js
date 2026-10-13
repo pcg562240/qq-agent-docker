@@ -4,10 +4,10 @@
 export async function reviewCandidate(db, c, { action, memoryId, chatKey, tenant }) {
   if (action === 'approve') {
     // 转正：候选 → memory_items，upsert 用 tenant+chat_key+content_key 匹配（宿主修复）
-    const cand = await db.collection('memory_candidates').findOne({ memory_id: memoryId, tenant_id: tenant });
+    const cand = await db.collection('memory_candidates').findOne({ memory_id: memoryId, tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}) });
     if (!cand) return { ok: false, error: '找不到候选 ' + memoryId };
     const key = cand.content_key;
-    await db.collection('memory_candidates').updateOne({ memory_id: memoryId, tenant_id: tenant }, {
+    await db.collection('memory_candidates').updateOne({ memory_id: memoryId, tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}) }, {
       $set: { status: 'approved', approved_at: new Date() },
     });
     await db.collection('memory_items').updateOne(
@@ -16,9 +16,11 @@ export async function reviewCandidate(db, c, { action, memoryId, chatKey, tenant
         $set: {
           memory_id: memoryId, kind: cand.kind, content: cand.content,
           subject_id: cand.subject_id ?? null, subject_name: cand.subject_name ?? null,
-          status: 'active', promoted_at: new Date(),
+          status: 'active', promoted_at: new Date(), last_seen_at: cand.last_seen_at || new Date(),
+          embedding: cand.embedding, embed_provider: cand.embed_provider,
         },
-        $setOnInsert: { created_at: new Date(), chat_key: cand.chat_key, mention_count: cand.mention_count ?? 1 },
+        $setOnInsert: { created_at: new Date(), chat_key: cand.chat_key },
+        $max: { mention_count: cand.mention_count ?? 1 },
       },
       { upsert: true },
     );
@@ -27,7 +29,7 @@ export async function reviewCandidate(db, c, { action, memoryId, chatKey, tenant
   }
   if (action === 'reject') {
     const res = await db.collection('memory_candidates').updateOne(
-      { memory_id: memoryId, tenant_id: tenant },
+      { memory_id: memoryId, tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}) },
       { $set: { status: 'rejected', rejected_at: new Date() } },
     );
     await audit(db, tenant, 'memory.rejected', { memory_id: memoryId });
@@ -36,48 +38,51 @@ export async function reviewCandidate(db, c, { action, memoryId, chatKey, tenant
   return { ok: false, error: '未知审核操作 ' + action };
 }
 
-export async function undoPromote(db, tenant, memoryId) {
+export async function undoPromote(db, tenant, memoryId, chatKey) {
   // 撤销转正：正式库删掉、候选退回待审（宿主阶段 D）
-  await db.collection('memory_items').deleteOne({ memory_id: memoryId, tenant_id: tenant });
+  await db.collection('memory_items').deleteOne({ memory_id: memoryId, tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}) });
   const res = await db.collection('memory_candidates').updateOne(
-    { memory_id: memoryId, tenant_id: tenant },
+    { memory_id: memoryId, tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}) },
     { $set: { status: 'pending', reopened: null, approved_at: null } },
   );
   await audit(db, tenant, 'memory.undone', { memory_id: memoryId });
   return { ok: res.modifiedCount > 0, memoryId, status: 'pending' };
 }
 
-export async function forgetOne(db, tenant, memoryIds) {
+export async function forgetOne(db, tenant, memoryIds, chatKey) {
   // 遗忘：候选+正式库一起删，删前把内容摘要写进审计（宿主：事后查得到删了什么）
-  const cands = await db.collection('memory_candidates').find({ tenant_id: tenant, memory_id: { $in: memoryIds } }).toArray();
-  await db.collection('memory_candidates').deleteMany({ tenant_id: tenant, memory_id: { $in: memoryIds } });
-  const items = await db.collection('memory_items').find({ tenant_id: tenant, memory_id: { $in: memoryIds } }).toArray();
-  await db.collection('memory_items').deleteMany({ tenant_id: tenant, memory_id: { $in: memoryIds } });
+  if (!Array.isArray(memoryIds) || !memoryIds.length || memoryIds.length > 100 || memoryIds.some(id => typeof id !== 'string' || !id)) return { ok: false, error: '需要 1–100 个完整记忆 ID' };
+  const cands = await db.collection('memory_candidates').find({ tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}), memory_id: { $in: memoryIds } }).toArray();
+  const items = await db.collection('memory_items').find({ tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}), memory_id: { $in: memoryIds } }).toArray();
   await db.collection('memory_audit').insertOne({
     event: 'memory.forgotten', tenant_id: tenant, memory_ids: memoryIds,
     content_summary: [...cands, ...items].map((m) => ({ id: m.memory_id, kind: m.kind, text: String(m.content ?? '').slice(0, 80) })),
     ts: new Date(),
   });
+  const filter = { tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}), memory_id: { $in: memoryIds } };
+  await db.collection('memory_candidates').deleteMany(filter);
+  await db.collection('memory_items').deleteMany(filter);
   return { ok: true, count: cands.length + items.length };
 }
 
-export async function archiveOne(db, c, { tenant, memoryIds, days }) {
+export async function archiveOne(db, c, { tenant, chatKey, memoryIds, days, confirm = false }) {
   // 衰减归档：只针对 event（梗/关系不会过期）；自动归档默认关（archiveAfterDays=0）
-  const filter = { tenant_id: tenant, kind: 'event' };
+  const filter = { tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}), kind: 'event', archived: { $ne: true } };
+  if (!(Array.isArray(memoryIds) && memoryIds.length) && !(Number.isFinite(days) && days > 0)) return { ok: false, error: '需要明确 memoryIds 或正整数 days' };
   if (Array.isArray(memoryIds) && memoryIds.length) filter.memory_id = { $in: memoryIds };
   else if (typeof days === 'number' && days > 0) {
     const cutoff = new Date(Date.now() - days * 86400_000);
     filter.last_seen_at = { $lt: cutoff };
   }
-  if (Array.isArray(memoryIds) && memoryIds.length) {
+  if (Array.isArray(memoryIds) && memoryIds.length && confirm === true) {
     // 单条归档（宿主第十八节：给了 memoryIds 就归档这几条）
-    const res = await db.collection('memory_items').updateMany({ tenant_id: tenant, memory_id: { $in: memoryIds } }, { $set: { archived: true, archived_at: new Date() } });
+    const res = await db.collection('memory_items').updateMany(filter, { $set: { archived: true, archived_at: new Date() } });
     await audit(db, tenant, 'memory.archived', { memory_ids: memoryIds });
     return { ok: true, count: res.modifiedCount };
   }
   // 按天数：两段式 —— 第一次 dry-run 只预览，第二次 apply 才真归档（宿主防手滑）
   const preview = await db.collection('memory_items').countDocuments(filter);
-  if (c.archiveAfterDays === 0 && !memoryIds) {
+  if (confirm !== true) {
     return { ok: true, count: 0, preview, applied: false, note: '自动归档默认关（archiveAfterDays=0）；如需归档请传 memoryIds 或显式设 archiveAfterDays' };
   }
   const res = await db.collection('memory_items').updateMany(filter, { $set: { archived: true, archived_at: new Date() } });

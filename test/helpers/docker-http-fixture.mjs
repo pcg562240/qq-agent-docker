@@ -13,7 +13,7 @@ class FakeBot {
   async send(options) { sent.push(options); return { id: 'SENT_QUOTED_ID' }; }
 }
 if (!getConfig().qqbot?.appId && !process.env.QQ_AGENT_PROFILES_ROOT) updateConfig({
-  qqbot: { appId: '123456', clientSecret: 'FIXTURE_SECRET', enabled: true },
+  qqbot: { appId: '123456', clientSecret: 'FIXTURE_SECRET', enabled: true, groupReplyMentionMode: process.env.TEST_GROUP_MENTION_MODE || 'off' },
   allow: { private: ['USER_with-hyphen'], groups: ['GROUP_with-hyphen'] },
   extensions: { hotReload: false },
 });
@@ -31,6 +31,18 @@ if (process.env.TEST_LLM_URL) updateConfig({
     security: { allowPrivateImageHosts: true }, skills: { 'reply-safety': { enabled: false } } } : {}),
 });
 else app.orchestrator.setPaused(true, 'test');
+if (process.env.TEST_QUERY_TOOLS === '1') {
+  // Test-only substitutes: query-completion regressions must never search the
+  // public web. Reapply after config refreshes, retaining real tool schemas.
+  const refresh = app.orchestrator.refreshToolDefs.bind(app.orchestrator);
+  const patch = () => {
+    app.orchestrator.toolDefs = app.orchestrator.toolDefs.map(d => !['web_search', 'web_fetch'].includes(d.id) ? d : {
+      ...d, execute: async (_ctx, args) => ({ content: args.query === 'FAIL' ? 'OFFLINE_QUERY_FAILED' : 'OFFLINE_QUERY_RESULT', isError: args.query === 'FAIL' })
+    });
+  };
+  app.orchestrator.refreshToolDefs = (...args) => { const result = refresh(...args); patch(); return result; };
+  patch();
+}
 const port = await app.start();
 if (process.send) process.send({ ready: true, port });
 else console.log('offline test fixture ready');
@@ -40,6 +52,9 @@ process.on('message', async message => {
     if (message.action === 'profile-memory') app.memory.append('group:GROUP_with-hyphen', 'memberImpression', message.text, { userId: 'USER_with-hyphen' });
     if (message.action === 'profile-memory-read') {
       process.send({ id: message.id, value: app.memory.getMember('group:GROUP_with-hyphen', 'USER_with-hyphen') }); return;
+    }
+    if (message.action === 'send-tool-parameters') {
+      process.send({ id: message.id, parameters: app.orchestrator.toolDefs.find(t => t.id === 'send_message').parameters }); return;
     }
     if (message.action === 'receive') {
       const group = message.group === true;

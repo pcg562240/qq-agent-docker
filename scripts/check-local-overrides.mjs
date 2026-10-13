@@ -1,5 +1,6 @@
 // Read-only maintenance gate. Inspects the Git INDEX, never publishes or edits files.
 import fs from 'node:fs';
+import { auditUpstreamInventory } from './upstream-inventory.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -73,7 +74,9 @@ export function main({ publicSnapshot = false } = {}) {
   const base = publicSnapshot ? manifest.upstream.commit
     : git(['rev-parse', `${manifest.upstream.tag}^{commit}`]).toString().trim();
   if (!/^[a-f0-9]{40}$/.test(base) || base !== manifest.upstream.commit) throw new Error('Upstream baseline tag does not match the recorded commit');
-  const issues = auditRepositoryFiles(manifest, entries, localEnvSecrets());
+  if (!publicSnapshot) git(['merge-base', '--is-ancestor', base, 'HEAD']);
+  const issues = [...auditRepositoryFiles(manifest, entries, localEnvSecrets()),
+    ...auditUpstreamInventory(entries, manifest)];
   if (issues.length) { console.error(JSON.stringify({ ok: false, issues }, null, 2)); process.exitCode = 1; return; }
   console.log(JSON.stringify({ ok: true, indexedFiles: entries.length, features: manifest.features.length,
     baseline: base, publicSnapshot, note: 'Index/path/credential checks passed; run test:local and review behavior separately.' }, null, 2));

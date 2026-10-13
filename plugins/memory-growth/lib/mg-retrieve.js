@@ -7,13 +7,14 @@ import { cosine } from './mg-dedupe.js';
  *   （字面不重叠但语义相关的记忆最该被捞出，先卡字面等于关在门外）；
  *   minScore 默认 0.48；过滤 archived。
  */
-export async function recallMemory(db, c, { tenant, query, topK = 5 }) {
+export async function recallMemory(db, c, { tenant, chatKey, query, topK = 5 }) {
   const minScore = c.minScore ?? 0.48;
   // 粗筛：该群最近 300 条（宿主：不再字面 $in 预筛）
   let pool = [];
   try {
     pool = await db.collection('memory_items').find({
       tenant_id: tenant,
+      ...(chatKey ? { chat_key: chatKey } : {}),
       archived: { $ne: true },
       status: { $in: ['active', 'approved'] },
     }).sort({ last_seen_at: -1 }).limit(300).toArray();
@@ -23,23 +24,19 @@ export async function recallMemory(db, c, { tenant, query, topK = 5 }) {
   // 打分：语义向量优先，退回词面
   const qNorm = normalizeQuery(query);
   const scored = pool.map((m) => {
-    let score = 0;
-    if (Array.isArray(m.embedding) && m.embedding.length) {
-      score = cosine(m.embedding, qNorm.vector || m.embedding.map(() => 0)) * 0.75;
-    }
-    // 词面重合降级为加分项（宿主：字面重合不再是硬预筛）
-    const jac = jaccardTokens(qNorm.tokens, tokenizeContent(m.content));
-    score += jac * 0.25;
+    // No real query embedding is available; normalize the lexical channel instead of
+    // comparing against an all-zero vector or accidentally against the stored vector itself.
+    const score = jaccardTokens(qNorm.tokens, tokenizeContent(m.content));
     return { ...m, score: Math.round(score * 10000) / 10000 };
   }).filter((m) => m.score >= minScore)
     .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+    .slice(0, Math.max(1, Math.min(10, Number(topK) || 5)));
 
   return { hits: scored, minScore, degraded: false };
 }
 
 function normalizeQuery(q) {
-  const t = String(q ?? '').toLowerCase().replace(/\s+/g, '');
+  const t = String(q ?? '').toLowerCase();
   const zh = t.match(/[\u4e00-\u9fa5]{2,}/g) || [];
   const tokens = new Set();
   for (const seg of zh) for (let i = 0; i + 2 <= seg.length; i++) tokens.add(seg.slice(i, i + 2));
@@ -47,7 +44,7 @@ function normalizeQuery(q) {
   return { tokens: [...tokens], vector: null }; // 语义向量由调用方（embedder）算好注入；这里词面
 }
 function tokenizeContent(text) {
-  const t = String(text ?? '').toLowerCase().replace(/\s+/g, '');
+  const t = String(text ?? '').toLowerCase();
   const out = new Set();
   const zh = t.match(/[\u4e00-\u9fa5]{2,}/g) || [];
   for (const seg of zh) for (let i = 0; i + 2 <= seg.length; i++) out.add(seg.slice(i, i + 2));

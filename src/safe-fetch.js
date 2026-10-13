@@ -229,9 +229,10 @@ function readBounded(res, maxBytes, asText) {
     };
     res.on('data', (chunk) => {
       if (settled) return;
-      total += chunk.length;
-      if (asText) text += decoder.write(chunk);
-      else chunks.push(chunk);
+      const part = chunk.subarray(0, Math.max(0, maxBytes - total));
+      total += part.length;
+      if (asText) text += decoder.write(part);
+      else chunks.push(part);
       // 只用字节数判断是否超限。原实现还额外判断了 text.length >= maxBytes，
       // 但 text.length 是字符数而 maxBytes 是字节数（UTF-8 下中文 1 字符 = 3 字节），
       // 单位不一致，会让刚好读满的响应被误标成 truncated。
@@ -255,7 +256,7 @@ function readBounded(res, maxBytes, asText) {
 }
 
 // 使用已校验的 IP 发起请求（保留 Host/SNI），从根上消除 DNS rebinding。
-function requestOnce(url, ip, { asBinary = false, maxBytes = 50000 } = {}) {  return new Promise((resolve, reject) => {
+function requestOnce(url, ip, { asBinary = false, maxBytes = 50000, timeoutMs = 20000, headers = {} } = {}) {  return new Promise((resolve, reject) => {
     const mod = url.protocol === 'https:' ? https : http;
     const port = url.port || (url.protocol === 'https:' ? 443 : 80);
     const req = mod.request({
@@ -267,11 +268,12 @@ function requestOnce(url, ip, { asBinary = false, maxBytes = 50000 } = {}) {  re
         host: url.host,
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) qq-agent/1.0',
         accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8,image/avif,image/webp,image/*;q=0.8',
-        'accept-language': 'zh-CN,zh;q=0.9'
+        'accept-language': 'zh-CN,zh;q=0.9',
+        ...Object.fromEntries(Object.entries(headers).filter(([k,v]) => ['user-agent', 'accept', 'referer'].includes(k.toLowerCase()) && typeof v === 'string' && !/[\r\n]/.test(v)))
       },
       servername: url.protocol === 'https:' ? url.hostname : undefined,
       rejectUnauthorized: url.protocol === 'https:',
-      timeout: 20000
+      timeout: timeoutMs
     }, (res) => {
       const statusCode = res.statusCode || 0;
       if ([301, 302, 303, 307, 308].includes(statusCode)) {
@@ -283,6 +285,8 @@ function requestOnce(url, ip, { asBinary = false, maxBytes = 50000 } = {}) {  re
         .then((body) => resolve({ statusCode, body, contentType: String(res.headers['content-type'] || '') }))
         .catch(reject);
     });
+    const deadline = setTimeout(() => req.destroy(new Error('请求总时限已到')), timeoutMs);
+    req.on('close', () => clearTimeout(deadline));
     req.on('timeout', () => req.destroy(new Error(`请求超时：${url.hostname}`)));
     req.on('error', reject);
     req.end();
@@ -292,13 +296,16 @@ function requestOnce(url, ip, { asBinary = false, maxBytes = 50000 } = {}) {  re
 const MAX_REDIRECTS = 5;
 
 /** 抓取网页文本（≤50000 字符），SSRF 全防护（不做内网例外）。 */
-export async function safeFetch(urlString, { browseLocked = false } = {}) {
+export async function safeFetch(urlString, { browseLocked = false, maxBytes = 50000, timeoutMs = 20000 } = {}) {
+  maxBytes = Math.max(1, Math.min(5_000_000, Number(maxBytes) || 50000));
+  const deadline = Date.now() + Math.max(1, Math.min(30000, Number(timeoutMs) || 20000));
   // 锁定校验放在**最前面**，连 DNS 都不做 —— 不在白名单就根本不该发起连接
   const lock = browseLocked ? checkBrowseLock(urlString) : { enabled: false, allowed: true, host: '' };
   if (!lock.allowed) throw new Error(`浏览锁定：${lock.host || '该地址'} 不在允许的域名清单内`);
   let { url, ip } = await validateFetchUrl(urlString);
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    const result = await requestOnce(url, ip, { asBinary: false, maxBytes: 50000 });
+    if (Date.now() >= deadline) throw new Error('抓取总时限已到');
+    const result = await requestOnce(url, ip, { asBinary: false, maxBytes, timeoutMs: deadline - Date.now() });
     if ([301, 302, 303, 307, 308].includes(result.statusCode)) {
       if (!result.redirect) throw new Error(`重定向缺少 Location: ${result.statusCode}`);
       const next = new URL(result.redirect, url).toString();
@@ -312,19 +319,22 @@ export async function safeFetch(urlString, { browseLocked = false } = {}) {
       continue;
     }
     const body = result.body || '';
-    return { url: url.toString(), statusCode: result.statusCode, truncated: body.length >= 50000, body };
+    return { url: url.toString(), statusCode: result.statusCode, truncated: Buffer.byteLength(body) >= maxBytes, contentType: result.contentType, body };
   }
   throw new Error('重定向次数过多，已停止');
 }
 
 /** 下载二进制（图片，≤maxBytes 字节），返回 { buffer, contentType }。 */
-export async function safeFetchBinary(urlString, maxBytes = 12 * 1024 * 1024, { browseLocked = false } = {}) {
+export async function safeFetchBinary(urlString, maxBytes = 12 * 1024 * 1024, { browseLocked = false, publicOnly = false, timeoutMs = 20000, headers = {} } = {}) {
+  maxBytes = Math.max(1, Math.min(32 * 1024 * 1024, Number(maxBytes) || 12 * 1024 * 1024));
+  const deadline = Date.now() + Math.max(1, Math.min(30000, Number(timeoutMs) || 20000));
   const lock = browseLocked ? checkBrowseLock(urlString) : { enabled: false, allowed: true, host: '' };
   if (!lock.allowed) throw new Error(`浏览锁定：${lock.host || '该地址'} 不在允许的域名清单内`);
-  const allowPrivate = getConfig().security?.allowPrivateImageHosts === true;
+  const allowPrivate = !publicOnly && getConfig().security?.allowPrivateImageHosts === true;
   let { url, ip } = await validateFetchUrl(urlString, { allowPrivate });
   for (let i = 0; i <= MAX_REDIRECTS; i++) {
-    const result = await requestOnce(url, ip, { asBinary: true, maxBytes });
+    if (Date.now() >= deadline) throw new Error('下载总时限已到');
+    const result = await requestOnce(url, ip, { asBinary: true, maxBytes, timeoutMs: deadline - Date.now(), headers });
     if ([301, 302, 303, 307, 308].includes(result.statusCode)) {
       if (!result.redirect) throw new Error(`重定向缺少 Location: ${result.statusCode}`);
       const next = new URL(result.redirect, url).toString();

@@ -5,7 +5,8 @@
 ## 应用源码
 
 - 原始 QQ Agent：Kondius，MIT；保留根目录 `LICENSE` 的原始声明。
-- Linux 直接基线：prolet1966/QQ-Agent-for-Linux，提交 `da6f0560c1c7530a985bb4c1542a88cae104b80e`。
+- 主上游：K0nd1us/QQ-agent 官方 Git 源码，提交 `11577baad321d1774caf0765d791c211072bfa83`。
+- 历史 Linux 兼容层与附加扩展来源（不再作为主上游）：prolet1966/QQ-Agent-for-Linux，提交 `da6f0560c1c7530a985bb4c1542a88cae104b80e`。
 - 本地 Docker 接入、兼容和维护修改：见 `docs/LOCAL-CUSTOMIZATIONS.md`。
 - 公开仓库采用经审查的源码快照，不包含上游旧提交中的构建缓存归档；详见 `docs/PUBLISHING.md`。这不删除源码中原有的作者与许可声明。
 

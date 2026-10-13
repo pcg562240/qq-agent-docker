@@ -1,3 +1,4 @@
+import { DATA_DIR } from '../../../src/config.js';
 // mg-config.js —— 记忆库配置（宿主 kb-config.js 的 memoryGrowth 段 + 独立库 qq_agent_memory）
 export const DEFAULTS = {
   mongo: { uri: 'mongodb://127.0.0.1:27017', db: 'qq_agent_memory', serverSelectionTimeoutMs: 800, connectTimeoutMs: 800 },
@@ -36,7 +37,7 @@ async function readHostConfig() {
   try { const mod = await import('../../../src/config.js'); if (mod.getConfig) return mod.getConfig(); } catch {}
   try {
     const fs = await import('node:fs');
-    const f = process.env.MEMORY_GROWTH_CONFIG || (process.cwd() + '/data/config.json');
+    const f = process.env.MEMORY_GROWTH_CONFIG || (DATA_DIR + '/config.json');
     return JSON.parse(fs.readFileSync(f, 'utf8'));
   } catch { return null; }
 }

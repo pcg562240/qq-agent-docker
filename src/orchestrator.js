@@ -2,7 +2,7 @@
 //
 // 流程（对应需求）：
 //   机器人空闲 → 用户发言 → 防抖聚批(wakeDelayMs) → 新开会话（一次独立的 agent 处理）
-//   → 开始时把所有消息标记为已读（触发批作为【本次唤醒】）→ agent 用工具发言/决定不发言
+//   → 开始时把所有消息标记为已读（触发批作为【未读信息】）→ agent 用工具发言/决定不发言
 //   → 会话弃置（不留 LLM 历史）→ 发现 JSON 里有未读 → drainDelayMs 后再新开会话 → …
 //   → 直到没有未读 → 回到空闲。
 //
@@ -19,7 +19,7 @@ import { currentProviders } from './providers.js';
 import { skillManager } from './skills/manager.js';
 import { getToolAvailability } from './tool-registry.js';
 import { rescueUnsentReply } from './reply-rescue.js';
-import { unsentReplyReminder } from './reply-completion.js';
+import { unsentReplyReminder, unsentQueryReplyReminder } from './reply-completion.js';
 import { noteRealPrompt, warmBeforeRealCall, captureRealBody } from './cache-warm.js';
 import { logger } from './logger.js';
 
@@ -47,7 +47,7 @@ export class Orchestrator {
     this.unreadFallbackTimers = new Map(); // chatKey -> timer
     this.pendingWake = new Set();      // 防抖中等待聚批的 chatKey
     this.pendingSessions = new Map();  // chatKey -> waiting sessionId（防抖期可见的“等待中”会话）
-    this.predictRolls = new Map();     // chatKey -> 随机档预判的钉住骰子值（批次结束清除）
+    this.verifiedWakes = new Set();    // 本轮 wake 由 onIncoming 触发判定排定的 chatKey（区别于 drain 等机械重排）
     this.consolidating = new Set();    // 正在整理记忆的 chatKey
     this.runningChats = new Set();     // 正在运行的 chatKey
     this.activeRuns = new Map();       // chatKey -> sessionId
@@ -61,6 +61,12 @@ export class Orchestrator {
     // 自判"是否仍在话题上"，偏离/结束则 finish("话题结束") 退出活跃期。
     // 到期自动退出兜底（LLM 忘了判断也不会永远活跃）。
     this.activeTopics = new Map();
+    // ── 提示词锚点（前缀缓存深化，2026-09-25）──
+    // chatKey -> { readIds, readCount, memberIds }：上一轮发给模型的
+    // 【记忆】+【已读信息】前缀状态。下一轮 buildUserPrompt 据此判断能否
+    // 原样复用该前缀（连续触发时缓存命中）。#runAgent 结束时从
+    // session.promptAnchorState 取回新状态。重启丢失 = 回到标准结构，无害。
+    this.promptAnchors = new Map();
     this.paused = false;
     this.pauseReason = null;
     this.proactiveTimer = null;
@@ -144,121 +150,93 @@ export class Orchestrator {
 
   // ── 入站接口 ───────────────────────────────────────────────────────────
 
-  /** 收到新消息（已通过白名单校验并写入 store）。 */
-  onIncoming(chatKey) {
+  /**
+   * 收到新消息（已通过白名单校验并写入 store）。
+   *
+   * 触发语义（2026-09-25 重做）：**逐条判定，一次定生死**。
+   * 每条消息入库后立即单独判定它是否触发会话（1 档：被@；2 档：被@/关键词；
+   * 3 档：被@/关键词/命中概率；4 档：必定触发）：
+   *   · 不触发 → 当场标已读（判定是纯本地计算，通常瞬间完成，
+   *     表现为"未读一闪即已读"），消息沉入历史成为【已读信息】。
+   *   · 触发   → 该消息保持未读，进入"等待中"倒计时（固定时长，不被重置）。
+   *     倒计时内后续到达的消息**不再判定**，只入库置未读，到点后与触发消息
+   *     一起被 drain 成【未读信息】。
+   *
+   * 倒计时不重置、不重新判定是刻意设计：触发消息 X 的判定结果代表"这一批
+   * 的锚点"，窗口内追加判定会让"批的触发原因"随每条新消息漂移（reason
+   * 与 contextLimit 对不上账）。窗口只是聚批，不是判定窗口。
+   */
+  onIncoming(chatKey, entry = null) {
     if (this.paused || this.aborted) return;
-    if (this.runningChats.has(chatKey)) return;   // 运行结束后 drain 会接管
-    this.#cancelUnreadFallback(chatKey);   // 新消息把"最后一批"重新推进了聚批窗口
-    this.scheduleWake(chatKey);
-  }
+    // 运行中 / 倒计时中：消息保持未读（不判定、不重置），由会话结束的
+    // drain 路径补判定（见 wake 末尾的 drain 注释）。
+    if (this.runningChats.has(chatKey)) return;
+    if (this.pendingWake.has(chatKey)) return;
 
-  /** 防抖聚批：等待 wakeDelayMs，期间每来一条消息重置计时。 */
-  /**
-   * 对"当前这批未读"做档位预判：这批消息值不值得机器人响应？
-   *
-   * scheduleWake（建等待会话前）与 wake（真正运行前）共用这一个函数，
-   * 避免两处各写一份判定、日后逻辑漂移。
-   *
-   * 注意：这里**不消费**未读（用 peekUnread 只看不取），
-   * 所以防抖窗口期间每次来新消息都可以重新预判 ——
-   * 先来一句闲聊（不命中、不显示），接着有人 @ 机器人（命中、立刻显示）。
-   *
-   * @returns {{shouldRespond:boolean, tier:number, count:number, reason:string}}
-   */
-  #predictTier(chatKey) {
     const cfg = getConfig();
-    const entries = this.store.peekUnread(chatKey, 200) || [];
-    const r = resolveContextTier({
-      triggerEntries: entries,
-      selfNickname: cfg.persona?.selfNickname || this.onebot.selfNickname || '',
-      botName: cfg.persona?.botName || '',
-      selfId: cfg.onebot?.selfId || this.onebot.selfId || '',
-      cfg: storeConfigForChat(chatKey),   // 按会话取档位：统一开关关闭时各群可以有独立滑条
-      isPrivate: String(chatKey).startsWith('private:'),   // 私聊恒响应
-      // 预判用固定 roll：随机档的骰子结果对同批消息保持稳定 ——
-      // 防抖窗口里每来一条新消息重置预判，若每次重掷，"预判说要响应（建了等待
-      // 会话）→ 窗口结束实跑又没响应"的抖动会非常频繁。
-      roll: this.predictRolls.get(chatKey)
-    });
-    // 没有未读就不算"需要响应"（防抖窗口刚建立时的空转）
-    if (entries.length === 0) return { ...r, shouldRespond: false, reason: '无未读' };
-    // 随机档：本批第一条未读到达时掷一次并钉住，之后窗口内的预判全部复用这个值。
-    // 钉住的是"预判口径"；wake 实跑时不传 roll（见 wake 里 tierResult 的掷骰子），
-    // 最终是否响应由实跑那次抽签决定 —— 预判只决定"要不要显示等待会话"。
-    if (r.tier === 3 && this.predictRolls.get(chatKey) === undefined) {
-      this.predictRolls.set(chatKey, Math.random() * 100);
-    }
-    return r;
-  }
-
-  /**
-   * 活跃模式：取某个会话的活跃期状态；到期/开关关闭时清理并返回 null。
-   * 返回 { topic, until } 或 null。
-   */
-  #activeState(chatKey) {
-    const cfg = getConfig();
-    if (cfg.chatActive?.enabled !== true) {
-      if (this.activeTopics.size) this.activeTopics.delete(chatKey);
-      return null;
-    }
-    const st = this.activeTopics.get(chatKey);
-    if (!st) return null;
-    if (Date.now() > Number(st.until) || !String(st.topic || '').trim()) {
-      this.activeTopics.delete(chatKey);
-      return null;
-    }
-    return st;
-  }
-
-  scheduleWake(chatKey, delay = null, { reuseSessionId = null } = {}) {
-    const ms = delay ?? Math.max(0, Number(getConfig().wakeDelayMs) || 2000);
-    if (this.pendingWake.has(chatKey)) clearTimeout(this.wakeTimers.get(chatKey));
-    this.pendingWake.add(chatKey);
-
-    // 等待窗口 > 0：在会话页立刻创建“等待中”会话，并随新消息重置倒计时
-    //
-    // ⚠️ 先预判再创建：档位非 4 时，若这批消息确定不会响应，
-    //    就**不创建**"等待中"会话 —— 否则用户会在会话页看到一堆
-    //    等半天最后变成"中止"的条目，既干扰又让人以为出了错。
-    //    窗口结束前若来了新消息且命中，届时再创建（见下面 pendingSessions 分支）。
-    //    原地重试（reuseSessionId）例外：会话已经是 running 状态，不进等待窗口
-    //    流程（预判/等待会话都是为"新批次"服务的）。
-    if (ms > 0 && !reuseSessionId && !this.runningChats.has(chatKey)) {
-      // 活跃期内的群不进"预判"分支（活跃 = 必响应，等待会话照常建），
-      // 否则 scheduleWake 在这里就把未读标已读，wake 永远不会被真正调起。
-      if (this.#activeState(chatKey)) {
-        const unread = this.store.peekUnread(chatKey, 3);
-        const first = unread[0];
-        const summary = first ? `活跃期：${first.senderName || first.senderId}：${String(first.text || '').slice(0, 40)}` : '活跃期等待新消息';
-        const waitUntil = Date.now() + ms;
-        const existing = this.pendingSessions.get(chatKey);
-        if (!existing || this.sessions.current.get(existing)?.status !== 'waiting') {
-          const session = this.sessions.create({
-            chatKey,
-            trigger: unread,
-            triggerSummary: summary,
-            triggerText: unread.map((m) => `${m.senderName || m.senderId}: ${String(m.text || '').slice(0, 80)}`).join(' | ').slice(0, 500),
-            waitUntil
-          });
-          this.pendingSessions.set(chatKey, session.id);
-          this.emit('session-start', { sessionId: session.id, chatKey, triggerSummary: summary });
-        }
-      } else {
-      const predicted = this.#predictTier(chatKey);
-      if (predicted.shouldRespond === false) {
-        // 不响应：把已存在的等待会话撤掉（例如刚被艾特、随后判定又不成立的情况）
-        const stale = this.pendingSessions.get(chatKey);
-        if (stale) {
-          this.#discardWaiting(stale);   // 干净消失，不留"中止"
-          this.pendingSessions.delete(chatKey);
+    // 前置条件（与 wake 的闸门同口径，在这里提前拦截可以少建一次定时器）：
+    //   模型未设置 → 消息保留未读，设置后（下一条消息或恢复积压）自动补处理
+    if (!String(cfg.api.model || '').trim()) return;
+    // 活跃期内的群：必响应，视作触发（与旧版"跳过判定"语义一致）
+    const active = this.#activeState(chatKey);
+    if (!active) {
+      const tierResult = resolveContextTier({
+        triggerEntries: entry ? [entry] : (this.store.peekUnread(chatKey, 1) || []),
+        selfNickname: cfg.persona?.selfNickname || this.onebot.selfNickname || '',
+        botName: cfg.persona?.botName || '',
+        selfId: cfg.onebot?.selfId || this.onebot.selfId || '',
+        cfg: storeConfigForChat(chatKey),
+        isPrivate: String(chatKey).startsWith('private:'),
+        // 单条判定当场掷骰、当场出结果 —— 没有"预判/实跑"两阶段了，
+        // 骰子结果由 resolveContextTier 的 reason 带回（含当时的值）。
+        roll: null
+      });
+      if (!tierResult.shouldRespond) {
+        // 不触发：这条消息立即标已读（只标这一条，不动窗口外已积压的未读——
+        // 那些是上一批遗留，由兜底定时器/下一次触发处理）。
+        if (entry) {
+          this.store.markEntryRead(chatKey, entry.id);
+        } else {
+          this.store.markAllRead(chatKey);
         }
         this.emit('chat-update', chatKey);
-        // 定时器仍然保留：窗口内可能来新消息，届时重新预判
-      } else {
+        return;
+      }
+    }
+
+    // 触发：进入固定的"等待中"倒计时（不重置）。verified 标记让 wake 知道
+    // 这一批是"逐条判定出过触发消息"的，批边界可以信任等待会话的起点。
+    this.scheduleWake(chatKey, null, { verified: true });
+  }
+
+  /**
+   * 进入"等待中"倒计时并到点唤醒（2026-09-25 重做）。
+   *
+   * 旧版是"防抖聚批"：窗口内每来一条消息就重置倒计时、重跑预判。
+   * 新版语义：
+   *   · 倒计时长度固定（wakeDelayMs），进入后不被任何因素重置；
+   *   · 窗口内新消息只入库（onIncoming 里 pendingWake 直接 return）；
+   *   · 除非手动中止（abortSession/abortAll）或全局暂停，倒计时必然走完 → wake。
+   * reuseSessionId（原地重试）与 drainBacklogAfterResume（恢复积压）仍走本函数，
+   * 但它们是"已确定要跑"的调用，直接排定时器即可。
+   */
+  scheduleWake(chatKey, delay = null, { reuseSessionId = null, verified = false } = {}) {
+    const ms = delay ?? Math.max(0, Number(getConfig().wakeDelayMs) || 2000);
+    // 不可重置：已在倒计时中就不动它（唯一例外是原地重试——它进来时
+    // pendingWake 一定没有该 chatKey，因为 runningChats 刚释放、旧定时器已到期）。
+    if (this.pendingWake.has(chatKey)) return;
+    this.pendingWake.add(chatKey);
+    // verified = 本轮 wake 由 onIncoming 的"触发判定"排定（区别于 drain/积压恢复
+    // 等机械重排）。wake 里据此决定是信任等待会话的批边界，还是对未读补判定 ——
+    // 机械排定的批没有"触发过"的保证，必须重新逐条判定。
+    if (verified) this.verifiedWakes.add(chatKey);
+
+    const waitUntil = Date.now() + ms;
+    // 创建/复用"等待中"会话（UI 可见）：触发摘要取当前未读第一条
+    if (!reuseSessionId && !this.runningChats.has(chatKey)) {
       const unread = this.store.peekUnread(chatKey, 3);
       const first = unread[0];
       const summary = first ? `${first.senderName || first.senderId}：${String(first.text || '').slice(0, 40)}` : '等待新消息聚批';
-      const waitUntil = Date.now() + ms;
       const existing = this.pendingSessions.get(chatKey);
       if (existing) {
         /* ⚠️ 必须用 current.get（活对象），不能用 get() ——
@@ -288,54 +266,52 @@ export class Orchestrator {
         this.emit('session-start', { sessionId: session.id, chatKey, status: 'waiting', triggerSummary: summary });
       }
       this.emit('chat-update', chatKey);
-      }
-      }
     }
 
     const timer = setTimeout(() => {
       this.pendingWake.delete(chatKey);
       const waitingId = this.pendingSessions.get(chatKey);
       this.pendingSessions.delete(chatKey);
-      // 注意：预判骰子（predictRolls）在这里**不删** —— wake 实跑要复用它
-      // （预判/实跑同骰子，见 wake 里 tierResult 的注释），删除点在 wake 的
-      // finally 与 #discardWaiting 路径里，保证批次真正结束才清。
       if (this.paused || this.aborted || this.runningChats.has(chatKey)) {
         if (waitingId) this.#finishWaiting(waitingId, 'aborted');
-        this.predictRolls.delete(chatKey);
+        this.verifiedWakes.delete(chatKey);
         return;
       }
       this.wake(chatKey, { waitingSessionId: waitingId ?? null, reuseSessionId: reuseSessionId ?? null })
         .catch((error) => console.error(`[orchestrator] wake ${chatKey} 出错:`, error))
-        .finally(() => this.predictRolls.delete(chatKey));
+        .finally(() => this.verifiedWakes.delete(chatKey));
     }, ms);
     this.wakeTimers.set(chatKey, timer);
   }
 
-  // ── 未读兜底（1~3 档的"无会话散消息"）──────────────────────────────
-  // 用户语义（2026-09-18）：档位低时群里大量闲聊不触发会话，但这些消息一直
-  // 挂着"未读"标记，存档页看起来像坏了一样。期望行为：只要没有触发会话，
-  // 消息在防抖聚批窗口结束后**短时间内**被标为已读；一旦某批消息触发会话，
-  // 该批（含运行期间新到的）走原有 drain 流程，窗口内的消息保持未读直到会话处理完。
+  /**
+   * 活跃模式：取某个会话的活跃期状态；到期/开关关闭时清理并返回 null。
+   * 返回 { topic, until } 或 null。
+   */
+  #activeState(chatKey) {
+    const cfg = getConfig();
+    if (cfg.chatActive?.enabled !== true) {
+      if (this.activeTopics.size) this.activeTopics.delete(chatKey);
+      return null;
+    }
+    const st = this.activeTopics.get(chatKey);
+    if (!st) return null;
+    if (Date.now() > Number(st.until) || !String(st.topic || '').trim()) {
+      this.activeTopics.delete(chatKey);
+      return null;
+    }
+    return st;
+  }
+
+
+  // ── 未读兜底（已随 2026-09-25 触发链路重做移除）────────────────────────
+  // 旧语义：1~3 档下"没触发会话"的散消息在防抖窗口后由定时器批量标已读。
+  // 新语义：每条消息入库时当场判定，不触发的当场标已读（onIncoming），
+  // 不存在"挂着的假未读"，兜底定时器失去存在意义。
+  // 保留 #cancelUnreadFallback 的空实现以兼容 abortSession 等旧调用点。
   #cancelUnreadFallback(chatKey) {
     const t = this.unreadFallbackTimers.get(chatKey);
     if (t) { clearTimeout(t); this.unreadFallbackTimers.delete(chatKey); }
-  }
-
-  #scheduleUnreadFallback(chatKey, ms) {
-    this.#cancelUnreadFallback(chatKey);
-    const delay = Math.max(0, Number(ms) || 0);
-    const timer = setTimeout(() => {
-      this.unreadFallbackTimers.delete(chatKey);
-      // 到点仍是"空闲 + 无等待会话"才标已读：期间有新消息会先走 onIncoming
-      // 取消本定时器，有会话触发则由 wake 的 cancel 接管。
-      if (this.paused || this.aborted || this.runningChats.has(chatKey) || this.pendingWake.has(chatKey)) return;
-      const marked = this.store.markAllRead(chatKey);
-      if (marked > 0) {
-        this.emit('chat-update', chatKey);
-        console.log(`[orchestrator] ${chatKey} ${marked} 条未触发会话的消息已按已读归档（档位兜底）`);
-      }
-    }, delay);
-    this.unreadFallbackTimers.set(chatKey, timer);
   }
 
   /**
@@ -367,11 +343,8 @@ export class Orchestrator {
   }
 
   /** 手动触发一次处理（UI 按钮）。 */
-  forceWake(chatKey) {
-    if (this.runningChats.has(chatKey)) return false;
-    this.scheduleWake(chatKey, 0);
-    return true;
-  }
+  // （「唤醒一次处理」按钮及其 force 唤醒链路已按需求移除：
+  //   不触发的消息现在立即标已读，无需手动补处理。）
 
   // ── 核心循环 ───────────────────────────────────────────────────────────
 
@@ -413,103 +386,150 @@ export class Orchestrator {
           this.emit('session-update', waitingSessionId);
         }
       }
-      setTimeout(() => {
+      // ⚠️ 3 秒重排定时器必须被跟踪（2026-09-26 审查）：原先裸 setTimeout 不记句柄，
+      // stop()/abortAll() 清不掉它 —— 应用退出后它仍会把 pendingWake 重新排上，
+      // 测试环境里表现为进程挂着不退（unref 让它不阻塞退出，但运行期它照样会在
+      // 停止后又拉起一次唤醒）。与 wakeTimers 同一张表管理，abortAll 时一并清掉。
+      const retryTimer = setTimeout(() => {
+        this.wakeTimers.delete(chatKey);
         if (!this.runningChats.has(chatKey) && !this.paused && !this.aborted) {
           this.scheduleWake(chatKey, 0);
         }
       }, 3000);
+      retryTimer.unref?.();
+      this.wakeTimers.set(chatKey, retryTimer);
       return;
     }
 
-    // ── 档位：先判断"这批消息值不值得回应"，再决定要不要取走未读 ──
+    // ── 取走触发批 ──
+    // 触发判定已在 onIncoming 里逐条完成（进入倒计时 = 必定运行），
+    // wake 不再做档位终审 —— 倒计时既然未被中止地走到了这里，就直接运行。
     //
-    // 关键顺序：判定必须发生在 drainUnread() 之前。
-    // drainUnread 会把未读取走并全部置为已读（作为触发批），
-    // 如果先取走再判定，未命中时就拿不到"该标记已读"的对象了。
-    //
-    // 未命中时：标记已读、不创建会话、不调模型 —— 这才是省 token 的关键
-    // （消息内容仍留在存档里，日后被艾特时会作为"已读历史"带进提示词）。
-    const cfgNow = getConfig();
-    let pendingEntries = [];
+    // ⚠️ 批的边界（2026-09-25 补丁 ×2）：未读消息可能有三种来源——
+    //   a) 倒计时窗口内的（触发消息 + 聚批追加）→ 进批；
+    //   b) 磁盘遗留的旧积压（旧进程/停机期间攒的，从未判定）→ 标已读沉历史；
+    //   c) **运行期间进来的**（上个会话 runningChats 占位时 onIncoming 直接
+    //      return，从未判定）→ 逐条补判定：
+    //        · 有触发消息（@/关键词/概率命中）→ 从最早的触发消息起组批运行；
+    //        · 全都不触发 → 全部标已读、不建会话、不调 LLM。
+      //      （补丁前的行为：drain 无差别吃掉全部未读 → 大量 tier 0"未触发"
+    //       会话 + 【已读信息】为空 + 白烧一次 LLM 调用。）
+    const cfgForJudge = getConfig();
+    let triggerEntries = [];
     if (!proactive) {
-      // 活跃模式（chatActive）：活跃期内的群跳过档位判定 —— 必响应，
-      // "是否继续"交给模型判断（提示词里注入话题锚点 + 偏离判断要求）。
-      // 到期自动退出（LLM 忘了 finish("话题结束") 也不会永远活跃）。
+      const probe = this.store.peekUnread(chatKey, 500) || [];
+      if (probe.length === 0 && waitingSessionId) {
+        this.#finishWaiting(waitingSessionId, 'aborted');
+        return;
+      }
+
+      // 判定锚点：
+      //   · **verified 批**（onIncoming 判定过触发 → scheduleWake(verified)）→
+      //     倒计时起点之后的消息天然在批内，起点之前的旧积压归档；
+      //   · **机械批**（drain / drainBacklogAfterResume / 重试排的，无 verified）→
+      //     未读从未判定（运行期/停机期间进来的），逐条补判定找最早的触发消息，
+      //     它之前的一律归档；全部不触发 → 标已读不建会话。
+      //     ⚠️ 不能用"有没有等待会话"区分 —— 机械排定也会建等待会话（UI 可见性
+      //     需要它），否则 drain 进来的闲聊会被误当成"触发过"整批塞进唤醒
+      //     （2026-09-25 晚的 tier 0 垃圾会话事故就是它）。
+      let batchFloorTs = Infinity;
+      let hasTrigger = false;
       const active = this.#activeState(chatKey);
-      if (!active) {
-        // peekUnread 只看不取，limit 给足以免漏判（判定用的是这批的文本）
-        pendingEntries = this.store.peekUnread(chatKey, 200) || [];
-        if (pendingEntries.length === 0) {
-          if (waitingSessionId) this.#finishWaiting(waitingSessionId, 'aborted');
-          return; // 没有未读就不空跑
+      if (this.verifiedWakes.has(chatKey)) {
+        if (waitingSessionId) {
+          const waiting = this.sessions.current.get(waitingSessionId);
+          if (waiting?.startedAt) batchFloorTs = Math.min(batchFloorTs, Number(waiting.startedAt) - 60_000);
         }
+        hasTrigger = true;   // onIncoming 判定过"触发"，批内必然有触发消息
+      } else if (!active) {
+        // 补判定：对每条未读单独跑 resolveContextTier（与 onIncoming 同口径）
+        for (const m of probe) {
+          const r = resolveContextTier({
+            triggerEntries: [m],
+            selfNickname: cfgForJudge.persona?.selfNickname || this.onebot.selfNickname || '',
+            botName: cfgForJudge.persona?.botName || '',
+            selfId: cfgForJudge.onebot?.selfId || this.onebot.selfId || '',
+            cfg: storeConfigForChat(chatKey),
+            isPrivate: String(chatKey).startsWith('private:'),
+            roll: null
+          });
+          if (r.shouldRespond) { batchFloorTs = m.ts; hasTrigger = true; break; }   // 最早的触发消息定边界
+        }
+      } else {
+        // 活跃期：必响应，边界 = 最早的未读
+        if (probe.length) { batchFloorTs = probe[0].ts; hasTrigger = true; }
+      }
 
-        // 复用 scheduleWake 那一份判定逻辑，避免两处各写一套、日后漂移
-        const tierResult0 = this.#predictTier(chatKey);
+      if (!hasTrigger) {
+        // 全部未读都不触发：标已读沉历史，不建会话、不调 LLM。
+        // 机械批带的等待会话也要干净消失（它只是倒计时的 UI 壳，从未消耗 token）。
+        const archived = this.store.markAllRead(chatKey);
+        if (archived > 0) {
+          console.log(`[orchestrator] ${chatKey} ${archived} 条未读经补判定均未触发，已标已读沉入历史`);
+          this.emit('chat-update', chatKey);
+        }
+        if (waitingSessionId) this.#discardWaiting(waitingSessionId);
+        return;
+      }
 
-        if (tierResult0.shouldRespond === false) {
-          // 不响应：不产生会话、不消耗 token。消息**不再立即**标已读 ——
-          // 留一个短兜底窗口（wakeDelayMs 同宽）：期间新到的消息与这批合并，
-          // 下一次预判一起重判（有人突然 @ 机器人时整批都能带上）；
-          // 冷静期过后仍无动静才按已读归档（存档页不留长期假未读）。
-          const waitAgain = tierResult0.tier >= 1 && tierResult0.tier <= 3;
-          if (waitAgain) {
-            this.#scheduleUnreadFallback(chatKey, Math.max(1000, Number(getConfig().wakeDelayMs) || 2000));
-          } else {
-            const marked = this.store.markAllRead(chatKey);
-            if (marked) {
-              console.log(`[orchestrator] ${chatKey} ${marked} 条未命中触发条件（档位 ${tierResult0.tier}），已标记已读、不响应`);
-            }
-          }
-          // 关键：让等待会话**干净消失**，而不是标成"中止"留在列表里
+      if (Number.isFinite(batchFloorTs)) {
+        const inWindow = probe.filter((m) => m.ts >= batchFloorTs);
+        if (inWindow.length === 0) {
+          // 理论不可达（触发消息自身就在窗口内）；防御性归档
+          const archived = this.store.markAllRead(chatKey);
+          if (archived > 0) console.log(`[orchestrator] ${chatKey} ${archived} 条旧积压未读（触发消息已缺失）已标已读归档`);
           if (waitingSessionId) this.#discardWaiting(waitingSessionId);
           this.emit('chat-update', chatKey);
           return;
         }
+        batchFloorTs = Math.min(...inWindow.map((m) => m.ts));
       }
-    }
 
-    // 确定要响应：未读被 drain 取走成为触发批，兜底定时器没有存在意义了
-    this.#cancelUnreadFallback(chatKey);
+      // 确定要响应：兜底定时器没有存在意义了
+      this.#cancelUnreadFallback(chatKey);
 
-    // 触发批：当前所有未读（含之前积压的）—— 到这说明确定要响应了
-    let triggerEntries = proactive ? [] : this.store.drainUnread(chatKey);
-    if (proactive) {
+      // 取走触发批：边界之后的进批，边界之前的旧积压标已读沉入历史
+      const { batch, archived } = Number.isFinite(batchFloorTs)
+        ? this.store.drainUnreadFrom(chatKey, batchFloorTs)
+        : { batch: this.store.drainUnread(chatKey), archived: 0 };
+      triggerEntries = batch;
+      if (archived > 0) {
+        console.log(`[orchestrator] ${chatKey} ${archived} 条旧积压未读已标已读沉入历史（未进本次唤醒）`);
+        this.emit('chat-update', chatKey);
+      }
+      if (triggerEntries.length === 0) {
+        if (waitingSessionId) this.#finishWaiting(waitingSessionId, 'aborted');
+        return; // 没有未读就不空跑
+      }
+    } else {
       // 主动机会：不打扰、无触发批，只带状态
       this.store.drainUnread(chatKey); // 把可能的零星未读一并处理掉
-    }
-    if (!proactive && triggerEntries.length === 0) {
-      if (waitingSessionId) this.#finishWaiting(waitingSessionId, 'aborted');
-      return; // 没有未读就不空跑
     }
 
     // ── 档位：响应时带多少条已读历史 ──
     // 在唤醒时算一次并固定下来（尤其是随机档的骰子结果），
     // 否则后续每次渲染提示词都会重新掷，会话记录与提示词会对不上。
-    // 两个修复（此前"已读历史偶尔拼接不进提示词"的根源）：
-    //   1. 主动机会没有触发批：resolveContextTier 对空触发批在 1~3 档下判
-    //      "未触发"（count=0）→【过去状态】一条不带，模型在失忆状态下被要求
-    //      主动开话题。proactive 显式按 4 档带 allCount 条已读。
-    //   2. 随机档实跑复用预判钉住的骰子：预判"会响应"建了等待会话、实跑重新掷
-    //      又没命中时，走的是"未触发"路径 —— 会话页有记录但模型没跑，
-    //      用户看到的就是"该回的历史没拼进提示词"。实跑与预判同骰子后，
-    //      只要在窗口内判定会响应，实跑必定带上对应条数的已读历史。
+    // 触发批的"触发原因"以**触发消息 X**的判定为准（onIncoming 里逐条判定时
+    // 已出结果，这里对同一批 drain 出来的消息重算一次 resolveContextTier——
+    // 判定输入相同（就是这批消息），结果一致；随机档不传 roll、重掷一次并
+    // 固定在本次运行里，会话记录（session.contextReason）记录的就是这里的值。
+    const cfgNow = getConfig();
     const tierResult = proactive
-      ? { tier: 4, count: Math.max(0, Number(storeConfigForChat(chatKey).allCount) || 80), reason: '主动机会（带历史）', shouldRespond: true }
+      ? { tier: 4, count: Math.max(0, Number(storeConfigForChat(chatKey).historyCount) || 80), reason: '主动机会（带历史）', shouldRespond: true }
       : resolveContextTier({
         triggerEntries,
         selfNickname: cfgNow.persona?.selfNickname || this.onebot.selfNickname || '',
         botName: cfgNow.persona?.botName || '',
         selfId: cfgNow.onebot?.selfId || this.onebot.selfId || '',
-        cfg: storeConfigForChat(chatKey),   // 与 #predictTier 同一来源，保证预判/实跑一致
+        cfg: storeConfigForChat(chatKey),
         isPrivate: String(chatKey).startsWith('private:'),   // 私聊恒响应
-        roll: this.predictRolls.get(chatKey)   // 随机档：与预判同骰子（预判已钉住）
+        roll: null
       });
-    // 活跃期覆盖：活跃中按 3 档口径带上下文（足够看清话题走向），
+    // 活跃期覆盖：必响应，读取条数与其余档位一致（统一 historyCount），
     // reason 标注活跃来源，会话页可解释"为什么 1 档设置却响应了"。
     const activeState = this.#activeState(chatKey);
     const effectiveTier = activeState
-      ? { tier: 3, count: Math.max(0, Number(storeConfigForChat(chatKey).randomCount) || 20), reason: `活跃期（话题：${activeState.topic}）`, shouldRespond: true }
+      ? { tier: 3, count: Math.max(0, Number(storeConfigForChat(chatKey).historyCount) || 80), reason: `活跃期（话题：${activeState.topic}）`, shouldRespond: true }
       : tierResult;
 
     this.runningChats.add(chatKey);
@@ -715,6 +735,14 @@ export class Orchestrator {
   }
 
   async #runAgent(session, { kind, chatId, chatKey, triggerEntries, proactive, seq, contextLimit = null, tierInfo = null, activeTopic = null }) {
+    for (const provider of skillManager.getCapabilityProviders('chat.run-guard', { chatKey, kind, proactive })) {
+      const guard = await provider.fn({ chatKey, kind, proactive });
+      if (guard?.block === true) {
+        this.sessions.finish(session.id, 'noreply');
+        this.emit('session-end', { sessionId: session.id, chatKey, reason: '扩展运行守卫' });
+        return;
+      }
+    }
     const cfg = getConfig();
     // 开一轮新运行：清空回复安全网的候选草稿池（草稿只在"这一次运行"内有意义，
     // 跨运行留着会把上一次的句子当成这次可以发的原句）。
@@ -729,15 +757,8 @@ export class Orchestrator {
     const chatName = kind === 'group' ? await this.#chatName(chatId) : '';
     const selfNickname = kind === 'group' ? (cfg.persona.selfNickname || this.onebot.selfNickname || cfg.persona.botName) : cfg.persona.botName;
 
-    // 上下文统计
-    const tenMinAgo = Date.now() - 600000;
-    const recentCount = this.store.recent(chatKey, { limit: 200 }).filter((m) => m.ts >= tenMinAgo).length;
-    const myMessages = this.store.recent(chatKey, { limit: 100 }).filter((m) => m.self);
-    const selfLastMessageAt = myMessages.length ? myMessages[myMessages.length - 1].ts : 0;
-    const lastMessageAt = (() => {
-      const all = this.store.recent(chatKey, { limit: 10 });
-      return all.length ? all[all.length - 1].ts : Date.now();
-    })();
+    // （原"上下文统计"三件套 —— 最近消息密度/上次发言时间/最后消息时间 ——
+    //  只喂【此刻状态】段，该段 2026-09-25 删除后不再计算。）
 
     // 表情库快照（提示词用）
     let stickerEntries = [];
@@ -819,9 +840,6 @@ export class Orchestrator {
       memory: this.memory,
       stickerEntries,
       selfNickname,
-      selfLastMessageAt,
-      lastMessageAt,
-      recentCount,
       runSeq: seq,
       moreUnreadDuringRun: this.store.unreadCount(chatKey) > 0,
       proactive,
@@ -829,7 +847,10 @@ export class Orchestrator {
       tierInfo,
       skillContext,
       // 活跃模式：注入当前话题锚点（buildUserPrompt 据此渲染【活跃模式】段）
-      activeTopic
+      activeTopic,
+      // 提示词锚点：传入上一轮的前缀状态；新状态经 session.promptAnchorState 带回
+      promptAnchor: { prev: this.promptAnchors.get(chatKey) || null },
+      session
     });
 
     session.systemPrompt = systemPrompt;
@@ -846,13 +867,19 @@ export class Orchestrator {
       session.contextLimit = tierInfo.count;
       session.contextReason = tierInfo.reason || '';
     }
+    // 提示词锚点状态存回 chatKey 级 Map（下一轮 buildUserPrompt 复用前缀）。
+    // buildUserPrompt 已把新状态写进 session.promptAnchorState；失败重试会
+    // 重置该字段（#resetSessionForRetry），届时旧锚点继续生效（幂等：同一批
+    // 消息重新锚定出相同前缀）。
+    if (session.promptAnchorState) this.promptAnchors.set(chatKey, session.promptAnchorState);
+    else this.promptAnchors.delete(chatKey);
     this.sessions.update(session.id);
     this.emit('session-update', session.id);
 
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: proactive
-        ? `${userPrompt}\n\n【本次唤醒】（主动机会）群里已经安静了一会儿。你可以主动抛一个自然的话题（像随口说的，不要像播报），也可以判断没必要说话就安静结束。`
+        ? `${userPrompt}\n\n【未读信息】（主动机会）群里已经安静了一会儿。你可以主动抛一个自然的话题（像随口说的，不要像播报），也可以判断没必要说话就安静结束。`
         : userPrompt }
     ];
 
@@ -918,6 +945,8 @@ export class Orchestrator {
     const maxRounds = Math.max(1, Number(cfg.api.maxRounds) || 12);
     let finish = false;
     let replyReminderUsed = false;
+    let queryReplyReminderUsed = false;
+    let lastReplyReminderMessageIndex = -1;
     let webSearchCount = 0;
     session.activity = '';
     session.webSearchCount = 0;
@@ -991,7 +1020,6 @@ export class Orchestrator {
       // 网络抖动/5xx/429 会自动重试（同一轮请求，messages 不变，幂等不重复发言）。
       // abortSignal：会话级中止时在途请求立即断开 —— isRetryableError 把
       // "中止"判为不可重试，chatCompletionWithRetry 不再打下一发，直接上抛。
-      // 会话级中止的请求中断器：本次运行的每次 LLM 请求都带这个 signal。
       // 预热要复用真实请求的 body，所以先按真实入参**只构造不发送**一份，
       // 把它交给预热模块 —— 这样预热与真实调用打到**同一个端点、同一个模型、
       // 同一段前缀**，缓存键才一致（账号池会换端点、专用模型会换模型，自己拼会踩坑）。
@@ -1127,15 +1155,29 @@ export class Orchestrator {
           rawContent, triggerEntries, session, skillContext
         });
         if (!rescued.length) {
-          const reminder = round + 1 < maxRounds ? unsentReplyReminder({
+          const reminderContext = {
             trigger: triggerEntries, messages, sent: session.sent, kind, proactive,
-            alreadyReminded: replyReminderUsed, canSend: toolDefs.some(t => t.id === 'send_message')
-          }) : '';
+            canSend: toolDefs.some(t => t.id === 'send_message')
+          };
+          let reminder = '', reminderPhase = 'initial';
+          if (round + 1 < maxRounds) {
+            reminder = unsentReplyReminder({ ...reminderContext, alreadyReminded: replyReminderUsed });
+            if (!reminder) {
+              reminder = unsentQueryReplyReminder({ ...reminderContext,
+                alreadyReminded: queryReplyReminderUsed, afterMessageIndex: lastReplyReminderMessageIndex });
+              reminderPhase = 'query';
+            }
+          }
           if (reminder) {
             replyReminderUsed = true;
             session.replyReminderUsed = true;
+            if (reminderPhase === 'query') {
+              queryReplyReminderUsed = true;
+              session.queryReplyReminderUsed = true;
+            }
             messages.push({ role: 'user', content: reminder });
-            session.messages.push({ role: 'user', content: reminder, protocolReminder: true });
+            lastReplyReminderMessageIndex = messages.length - 1;
+            session.messages.push({ role: 'user', content: reminder, protocolReminder: true, protocolReminderPhase: reminderPhase });
             markActivity('正在提醒模型发送面向用户的回复…');
             continue;
           }
@@ -1221,9 +1263,6 @@ export class Orchestrator {
         }
         toolResults.push({ role: 'tool', tool_call_id: call.id, name, content: contentStr, isError: !!result.isError });
         session.messages.push({ toolCall: { name, args: safeParse(argsRaw), result: contentStr.slice(0, 2000), isError: !!result.isError } });
-        // 工具调用次数：与上面这条 push 一一对应，UI 的「工具 N」和用量页同口径。
-        // 注意是"每次调用"而不是"每轮"：一轮可并发多个工具，rounds 只 +1 一次。
-        session.toolCalls = (Number(session.toolCalls) || 0) + 1;
         if (media.length) {
           const imgCount = media.filter((p) => p.type === 'image_url').length;
           const vidCount = media.filter((p) => p.type === 'video_url').length;
@@ -1463,7 +1502,10 @@ export class Orchestrator {
     try {
       for (const p of skillManager.getCapabilityProviders('chat.ban-state', { chatKey, kind: 'group' })) {
         const r = p.fn({ chatKey, action: 'check' });
-        if (r?.known && r.muted) return true;
+        if (r?.known && r.muted) {
+          this.#muteCache.set(chatKey, { muted: true, checkedAt: Date.now() });
+          return true;
+        }
       }
     } catch { /* Skill 坏了不影响禁言判断，继续走查询 */ }
 

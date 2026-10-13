@@ -17,10 +17,14 @@ export class IngestQueue {
     if (this.size >= this.maxSize) await this.flush();
   }
   async flush() {
+    if (this.flushing) return this.flushing;
     if (!this.items.size) return;
-    const items = [...this.items.values()].map((v) => v.item);
-    this.items.clear();
-    this.size = 0;
-    await this.onFlush?.(items);
+    const batch = [...this.items.entries()];
+    this.flushing = (async () => {
+      await this.onFlush?.(batch.map(([, v]) => v.item));
+      for (const [key, value] of batch) if (this.items.get(key) === value) this.items.delete(key);
+      this.size = this.items.size;
+    })();
+    try { await this.flushing; } finally { this.flushing = null; }
   }
 }

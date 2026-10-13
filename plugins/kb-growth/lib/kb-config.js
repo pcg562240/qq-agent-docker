@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { DATA_DIR } from '../../../src/config.js';
 // kb-config.js —— 配置默认值（从宿主 kb-config.js 照搬 DEFAULTS，独立于宿主 config.js）
 export const DEFAULTS = {
   enabled: true,
@@ -52,7 +54,7 @@ async function readHostConfig() {
   try { const mod = await import('../../../src/config.js'); if (mod.getConfig) return mod.getConfig(); } catch {}
   try {
     const fs = await import('node:fs');
-    const f = process.env.KB_GROWTH_CONFIG || (process.cwd() + '/data/config.json');
+    const f = process.env.KB_GROWTH_CONFIG || (DATA_DIR + '/config.json');
     return JSON.parse(fs.readFileSync(f, 'utf8'));
   } catch { return null; }
 }
@@ -69,16 +71,13 @@ export function getCfg() { return cache || applyEnvOverrides(deepMerge(DEFAULTS,
 
 export function setCfg(patch) { cache = applyEnvOverrides(deepMerge(getCfg(), patch || {})); return cache; }
 
-export function paths() { return { root: process.cwd(), data: process.cwd() + '/data' }; }
+export function paths() { return { root: path.dirname(DATA_DIR), data: DATA_DIR }; }
 
 export function resolvePath(p, fallbackName = 'kb-growth') {
-  const raw = String(p ?? '').trim();
-  const { data, root } = paths();
-  if (!raw) return data + '/' + fallbackName;
-  if (p.startsWith('/')) return raw;
-  const normalized = raw.replace(/^[.]/, '');
-  if (normalized.startsWith('data/')) return root + '/' + normalized;
-  return data + '/' + raw;
+  const raw = String(p || fallbackName).replace(/^\.?[\/\\]?data[\/\\]/, '');
+  const target = path.resolve(DATA_DIR, raw);
+  if (target !== DATA_DIR && !target.startsWith(path.resolve(DATA_DIR) + path.sep)) throw Error('知识库路径超出当前机器人数据目录');
+  return target;
 }
 
 export function tenantFor(chatKey, cfgObj = getCfg()) {

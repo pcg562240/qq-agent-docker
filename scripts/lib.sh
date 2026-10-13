@@ -23,19 +23,11 @@ set -euo pipefail
 # ── 版本与标识 ──
 APP_NAME="QQ Agent"
 PKG_NAME="qq-agent"
-# APP_VERSION 是【分发版本】：决定 deb/rpm/AppImage 的文件名与包元数据。
-# 它与 package.json 的 version（【应用版本】，即上游 Windows 版 V0.4.4）是两回事：
-# 本移植版只重新打包、不改应用代码，故 package.json 保持 0.4.4 不动。
-# 0.4.5 = 仅修复 deb/rpm 启动器的 Chromium 沙箱判据（见 scripts/03-stage.sh）。
-# ── 分发版本（唯一口径）─────────────────────────────────────────────────
-# 2026-10-07 统一：仓库里长期存在"标题 0.4.6 / 包版本 0.4.4.1"这类不一致
-# （v0.4.6-linux 与 v0.4.6-linux-r2 两个正式发布的 APP_VERSION 都是 0.4.4.1，
-#   而 v0.4.7-arm64 里是 0.4.7）。现在起以**这里**为唯一真源：
-#   lib.sh 的 APP_VERSION == deb/rpm/AppImage 文件名 == git tag == Release 标题。
-# 0.4.7 = 0.4.6 + neo-plan 接入（阶段0 构建门禁、阶段1 基线、阶段2 宿主改造、
-#         阶段3 十个扩展接入、阶段4 只读面板与可解释性、阶段5 预检与可回滚接入包）。
-# 需要临时改版本号时用 QL_APP_VERSION=... 覆盖即可（CI 与本地同一套代码）。
-APP_VERSION="${QL_APP_VERSION:-0.4.7}"
+# 默认分发版本与 package.json / 官方 Git 源码版本保持一致。
+# Linux 历史版本 0.4.7 不再作为当前应用版本；这不是功能或配置回退。
+# Docker 发行修订用独立的 vX.Y.Z-docker.N 标签，已发布标签不得移动。
+# 需要临时改桌面打包版本号时用 QL_APP_VERSION=... 显式覆盖。
+APP_VERSION="${QL_APP_VERSION:-0.4.0}"
 PKG_RELEASE="1"
 ELECTRON_VERSION="33.4.11"
 SNOWLUMA_VERSION="1.14.19"

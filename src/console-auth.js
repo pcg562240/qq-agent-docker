@@ -1,5 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 
+// Accept explicitly chosen passwords; docker:init still generates 64 random
+// hexadecimal characters. Keep the cookie/header-safe alphabet and upper bound.
+export function validConsoleToken(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,256}$/.test(value);
+}
+
 // Explicit authorities (host[:port]), never wildcards or arbitrary LAN ranges.
 // Restrict the syntax before URL normalization so credentials, paths, escapes,
 // ambiguous numeric IP forms and DNS-rebinding domains cannot slip through.

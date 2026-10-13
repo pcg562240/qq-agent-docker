@@ -20,16 +20,16 @@ export async function retrieveFromKb(mongoHandle, opts = {}) {
   } catch { return { confidence: 0, hits: [], ms: Date.now() - t0 }; }
 
   // 应用侧：top-K 补取向量 → 余弦 → 融合
-  const qVec = null; // 向量由 Embedder 在调用方算好注入；这里只做关键词分（语义向量在 kb-growth.js 主文件并行算）
+  // No query embedding is supplied: normalize the available lexical component to [0,1].
   const scored = hits.map((h) => {
     const kwScore = h.hit_count / Math.max(1, qTokens.length);
-    const vecScore = 0; // 占位；实际语义余弦在 kb-growth.js 主文件并行算后传入
-    const conf = round(kwScore * (Number(retrieve.keywordWeight) || 0.38) + vecScore * (Number(retrieve.vectorWeight) || 0.62));
-    return { ...h, _conf: conf };
-  }).sort((a, b) => b._conf - a._conf).slice(0, topK);
+
+    const conf = round(Math.min(1, Math.max(0, kwScore)));
+    return { ...h, _conf: conf, retrieval: 'lexical' };
+  }).filter(h => h._conf >= (retrieve.hardMinConfidence ?? 0.58)).sort((a, b) => b._conf - a._conf).slice(0, topK);
 
   const maxConf = scored[0]?._conf ?? 0;
-  const hardMin = Number(retrieve.hardMinConfidence) || 0.58;
+  const hardMin = retrieve.hardMinConfidence ?? 0.58;
   if (maxConf < hardMin) return { confidence: 0, hits: [], ms: Date.now() - t0 };
   return { confidence: maxConf, hits: scored, ms: Date.now() - t0 };
 }

@@ -14,7 +14,7 @@
 
 let cfg = () => ({});
 let banStateFn = null;          // 软依赖 chat.ban-state（来自 plugins/ban-state）
-let lastBurst = [];             // 最近连发时间戳
+let lastBurst = new Map();             // 最近连发时间戳
 let mutedUntil = {};            // chatKey → 解禁时间戳
 let mutedReason = {};
 
@@ -23,30 +23,33 @@ let api = null;
 export function setup(a) {
   api = a;
   cfg = a.config;
-  banStateFn = api.capability('chat.ban-state');   // 软依赖，缺了降级（守卫不生效但聊天正常）
+  banStateFn = (args) => api.capability('chat.ban-state', args);   // 软依赖，缺了降级（守卫不生效但聊天正常）
   api.log('proactive-chat 已加载（禁言守卫 + 自适应连发窗口）');
 }
 
 export function available() {
-  return { ok: true, reason: banStateFn ? '禁言守卫就绪' : '禁言守卫降级（chat.ban-state 缺失）' };
+  return { ok: true, reason: api?.hasCapability('chat.ban-state') ? '禁言守卫就绪' : '禁言守卫降级（chat.ban-state 缺失）' };
 }
 
 export async function activate(ctx) {
-  lastBurst = [];
+  lastBurst = new Map();
+  sentCounts.clear();
   mutedUntil = {};
   mutedReason = {};
   api.log?.('proactive-chat: 已激活（连发窗口 ' + (cfg().burstWindowSec ?? 180) + 's）');
 }
 
 export async function deactivate(ctx) {
-  lastBurst = [];
+  lastBurst = new Map();
+  sentCounts.clear();
   mutedUntil = {};
   mutedReason = {};
   api.log?.('proactive-chat: 已停用，连发/禁言状态清理');
 }
 
 export function dispose() {
-  lastBurst = [];
+  lastBurst = new Map();
+  sentCounts.clear();
   mutedUntil = {};
   mutedReason = {};
 }
@@ -59,9 +62,7 @@ function isMuted(chatKey, ctx) {
     try {
       const r = banStateFn({ chatKey, action: 'check' });
       if (r?.muted) {
-        mutedUntil[chatKey] = r.mutedUntil ?? Date.now() + 3600_000;
-        mutedReason[chatKey] = 'ban-state 插件报告禁言';
-        return { muted: true, until: mutedUntil[chatKey], reason: 'ban-state' };
+        return { muted: true, until: r.mutedUntil ?? Date.now() + (r.remainSec || 1) * 1000, reason: 'ban-state' };
       }
     } catch {}
   }
@@ -71,42 +72,19 @@ function isMuted(chatKey, ctx) {
 /** 记录一次连发（after-response 钩子调用）。 */
 function recordBurst(chatKey, at = Date.now()) {
   const windowStart = at - (cfg().burstWindowSec ?? 180) * 1000;
-  lastBurst = [...lastBurst.filter((t) => t >= windowStart), at];
+  lastBurst.set(chatKey, [...(lastBurst.get(chatKey) || []).filter(t => t >= windowStart), at].slice(-100));
 }
 
 
+const sentCounts = new Map();
 export const hooks = {
-  /**
-   * 响应后：记录连发节奏（供 proactive.schedule 判断）。
-   * 宿主：被禁言的发送失败时记 mutedUntil（守卫核心）。
-   */
-  'after-response': ({ response, session }) => {
-    const chatKey = session?.chatKey;
-    if (!chatKey) return;
-    // 禁言守卫：发送被拒且 result=120 / send group message rejected
-    const rejected = response?.rejected || response?.muted;
-    if (rejected && String(response?.error ?? '').match(/result=120|send group message rejected|禁言/)) {
-      mutedUntil[chatKey] = Date.now() + (Number(response?.shutUpSeconds) || 3600) * 1000;
-      mutedReason[chatKey] = response?.errorReason ?? '禁言';
-      api_log('proactive-chat: 禁言守卫触发 ' + chatKey + ' → ' + new Date(mutedUntil[chatKey]).toLocaleTimeString('zh-CN') + ' 解禁');
-      return;
-    }
-    // 正常响应 → 记连发
-    recordBurst(chatKey);
-  },
-
-  /**
-   * 提示词组装前：若被禁言，把「静音中」信息注入 ctx（宿主：消息沉底、不叫模型）。
-   */
-  'before-context': (ctxArg) => {
-    const chatKey = ctxArg?.chatKey;
-    if (!chatKey) return;
-    const m = isMuted(chatKey);
-    if (m.muted && ctxArg?.triggerEntries) {
-      // 宿主：禁言时消息沉底，不叫模型（在 orchestrator 层跳过 run）
-      ctxArg.skipRun = true;
-      ctxArg.skipReason = '禁言中（' + new Date(m.until).toLocaleTimeString('zh-CN') + ' 解禁），消息沉底不叫模型';
-    }
+  // LLM responses are not QQ sends. Count only confirmed session output.
+  'after-tool': ({ chatKey, session } = {}) => {
+    if (!chatKey || !session?.id) return;
+    const count = session.sent?.length || 0;
+    if (count > (sentCounts.get(session.id) || 0)) recordBurst(chatKey);
+    sentCounts.set(session.id, count);
+    while (sentCounts.size > 100) sentCounts.delete(sentCounts.keys().next().value);
   },
 };
 
@@ -126,10 +104,22 @@ export function proactiveStatus({ chatKey, now = Date.now() } = {}) {
   const c = cfg();
   if (!c.enabled) return { shouldProactive: false, reason: '未启用' };
   const windowStart = now - (c.burstWindowSec ?? 180) * 1000;
-  const recentBurst = lastBurst.filter((t) => t >= windowStart).length;
+  const burst = lastBurst.get(chatKey) || [];
+  const recentBurst = burst.filter((t) => t >= windowStart).length;
   if (recentBurst >= (c.maxConsecutive ?? 3)) return { shouldProactive: false, reason: '已达连发上限' };
-  const lastAt = lastBurst[lastBurst.length - 1] ?? 0;
+  const lastAt = burst[burst.length - 1] ?? 0;
   if (now - lastAt < (c.minGapSec ?? 20) * 1000 && lastAt > 0) return { shouldProactive: false, reason: '未到最小间隔' };
   return { shouldProactive: true, reason: '群聊热，可主动接话' };
 }
 
+export const providers = {
+  'chat.run-guard': ({ chatKey, proactive } = {}) => {
+    const m = isMuted(chatKey);
+    if (m.muted) return { block: true, reason: '禁言中' };
+    if (proactive) {
+      const status = proactiveStatus({ chatKey });
+      if (!status.shouldProactive) return { block: true, reason: status.reason };
+    }
+    return { block: false };
+  },
+};

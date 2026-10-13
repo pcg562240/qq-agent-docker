@@ -1,7 +1,7 @@
 {
   "id": "conversation-memory",
   "name": "分层会话记忆",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "category": "knowledge",
   "description": "把聊天压缩成日块索引，让模型能回忆很久以前的事。平常不进提示词、不花 token，问旧事才检索。",

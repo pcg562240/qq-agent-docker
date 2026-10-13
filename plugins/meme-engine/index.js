@@ -72,6 +72,7 @@ async function probeSemantic() {
 }
 
 let api = null;
+let generation = 0;
 
 export function setup(a) {
   api = a;
@@ -84,6 +85,7 @@ export function available() {
 }
 
 export async function activate(ctx) {
+  const epoch = ++generation;
   // 数据目录：V0.3.1 核心通过 ctx.dataDir / ctx.paths.data 提供；退化到 process.cwd()/data
   const c = cfg();
   dataDir = path.join(DATA_DIR, 'meme-engine');
@@ -93,6 +95,7 @@ export async function activate(ctx) {
   // 语义向量服务探活 + 后台缓存（宿主 ensureMemeVectors：改梗才重算，200 条一次约 200ms）
   if (c.semanticEmbedEnabled !== false) {
     await probeSemantic();
+    if (epoch !== generation) return;
     if (semanticProbeState.ok) {
       const t0 = Date.now();
       try {
@@ -110,6 +113,7 @@ export async function activate(ctx) {
             return (await res.json()).vectors || [];
           },
         });
+        if (epoch !== generation) return;
         persist();
         api.log?.('meme-engine: 梗向量缓存完成（' + (Date.now() - t0) + 'ms）');
       } catch (e) {
@@ -117,23 +121,21 @@ export async function activate(ctx) {
       }
     }
     // 看门狗：每 60s 重探一次（宿主独立 watchdog 简化为插件内轮询）
+    if (epoch !== generation) return;
     vectorProbeTimer = setInterval(() => { probeSemantic().catch(() => {}); }, 60_000);
     vectorProbeTimer.unref?.();
   }
 }
 
 export async function deactivate(ctx) {
+  generation++;
   if (vectorProbeTimer) { clearInterval(vectorProbeTimer); vectorProbeTimer = null; }
   memesCache = null;
   vectorsCache = null;
   api.log?.('meme-engine: 已停用');
 }
 
-export function dispose() {
-  vectorProbeTimer = null;
-  memesCache = null;
-  vectorsCache = null;
-}
+export function dispose() { return deactivate(); }
 
 // ── providers ────────────────────────────────────────────────────
 export const providers = {

@@ -61,7 +61,7 @@ export function replySpeakerTag(reply, { notes = null } = {}) {
 
 /** 去掉文本里已存在的 (QQ:xxx) 标记（避免重复拼接）。 */
 export function stripSpeakerTags(text) {
-  return String(text ?? '').replace(/\s*\(QQ:\d{1,15}\)/g, '');
+  return String(text ?? '').replace(/\s*\(QQ:(?:\d{1,20}|[a-fA-F0-9]{32})\)/g, '');
 }
 
 /**

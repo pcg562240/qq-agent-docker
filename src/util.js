@@ -59,12 +59,12 @@ export function escapeCqText(text) {
 
 /**
  * 防提示注入/泄露：把用户昵称、消息文本里的“指令式方括号标记”弱化，
- * 避免群友伪装成系统段（如【本次唤醒】）骗模型。只处理外观，不改变语义。
+ * 避免群友伪装成系统段（如【未读信息】）骗模型。只处理外观，不改变语义。
  */
 export function sanitizeUserText(text) {
   let s = String(text ?? '');
   // 全角化方括号包裹的疑似系统标记：【xxx】→【xxx】保留，但 [xxx] 中含中文关键词的换成（xxx）
-  s = s.replace(/\[(本次唤醒|系统|管理员|owner| Owner|OWNER|角色扮演|会话令牌|当前时间)[^\]]*\]/gi, '($1)');
+  s = s.replace(/\[(未读信息|已读信息|新已读信息|新加入成员|本次唤醒|过去状态|系统|管理员|owner| Owner|OWNER|角色扮演|会话令牌|当前时间)[^\]]*\]/gi, '($1)');
   return s;
 }
 

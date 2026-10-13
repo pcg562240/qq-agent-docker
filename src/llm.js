@@ -3,6 +3,18 @@
 import { getConfig } from './config.js';
 import { resolveModelPrice, priceAt } from './model-prices.js';
 import { skillManager } from './skills/manager.js';
+import {
+  resolveThinkingRequest, buildThinkingParams, stripThinkingParams,
+  looksLikeThinkingRejection, extractReasoning, extractReasoningTokens, THINKING_BODY_KEYS
+} from './thinking.js';
+
+// Downstream compatibility: an explicitly active legacy adapter keeps its settings.
+// Otherwise use the official built-in implementation; never toggle or rewrite config.
+function legacyThinkingActive(capability, context) {
+  return skillManager.getCapabilityProviders(capability, context)
+    .some(p => p.skillId === 'thinking-adapters');
+}
+
 import { describeNetError, previewBody } from './providers.js';
 import { logger } from './logger.js';
 import crypto from 'node:crypto';
@@ -17,7 +29,7 @@ function authHeaders(apiKey, baseUrl = '', model = '') {
   // 走中转站转发时 baseUrl 不是 opencode.ai，只能靠模型 id 的 opencode-go/ 前缀识别。
   if (/opencode\.ai/i.test(String(baseUrl)) || /^opencode-go\//i.test(String(model || ''))) {
     h['x-opencode-session'] = getOpencodeSessionId();
-    h['user-agent'] = 'qq-agent/0.3';   // 官方文档要求客户端自报身份，别用通用库名
+    h['user-agent'] = 'qq-agent/0.4';   // 官方文档要求客户端自报身份，别用通用库名
   }
   return h;
 }
@@ -373,6 +385,19 @@ export async function chatCompletion({ messages, tools = null, toolChoice = 'aut
     // 不记录的话，降级路径会永久丢掉用户设的采样温度 —— 表现为
     // "偶尔（网关拒绝思考参数时）回复风格突变"，很难复现也很难归因。
     let removedTemperature;
+    if (!legacyThinkingActive('llm.request-params', ctx)) {
+      try {
+        const req = resolveThinkingRequest(api, ctx);
+        const built = buildThinkingParams({ effort: req.effort, dialect: req.dialect, budget: req.budget });
+        if (built.applied) {
+          body = { ...body, ...built.params };
+          if (built.omitTemperature && body.temperature !== undefined) {
+            removedTemperature = body.temperature;
+            delete body.temperature;
+          }
+        }
+      } catch (error) { skillManager.recordError('thinking', error); }
+    }
     for (const fn of skillManager.getRequestTransforms(ctx)) {
       try {
         const next = await fn({ body, api, model: api.model, messages, tools, temperature: temp, context: ctx });
@@ -466,7 +491,10 @@ export async function chatCompletion({ messages, tools = null, toolChoice = 'aut
   //   预热若自己拼 body，就会打到另一个端点/另一个模型上 —— 缓存键不同，
   //   缓存写进了别处，真实调用自然读不到（实测就是这个现象）。
   //   所以预热必须复用真实调用**同一份** body 与同一个 api。
-  if (buildOnly) return { body, api, model: api.model, baseBody };
+  if (buildOnly) {
+    clearTimeout(timer);
+    return { body, api, model: api.model, baseBody };
+  }
 
   let res;
   try {
@@ -591,6 +619,10 @@ function reportPoolFeedback(payload) {
 
 /** 依次执行 llm.response / llm.usage 转换器（错误隔离）。 */
 async function applyResultTransforms(result, ctx) {
+  try {
+    const reasoning = extractReasoning(result.message);
+    if (reasoning) result.reasoning = reasoning;
+  } catch { /* Reasoning extraction must not interrupt a reply. */ }
   for (const fn of skillManager.getResponseTransforms(ctx)) {
     try {
       const next = await fn({ result, ...ctx });
@@ -615,6 +647,11 @@ async function applyResultTransforms(result, ctx) {
       skillManager.recordError('llm.usage', error);
     }
   }
+  // Official fallback, not an additive second count after the legacy usage adapter.
+  if (!Object.hasOwn(extra, 'reasoningTokens')) {
+    const n = extractReasoningTokens(result.usage);
+    if (n) { extra.reasoningTokens = n; hasExtra = true; }
+  }
   if (hasExtra) result.extraUsage = extra;
 }
 
@@ -625,6 +662,12 @@ async function applyResultTransforms(result, ctx) {
  * 只询问一次、只重试一次：避免参数互斥时来回重试把配额烧穿。
  */
 async function withoutRejectedParams(body, errorText, ctx, status = 400) {
+  if ([400, 422].includes(status) && !legacyThinkingActive('llm.retry-advisor', ctx)
+      && looksLikeThinkingRejection(errorText)) {
+    const keys = THINKING_BODY_KEYS.filter(k => k in body);
+    if (keys.length) return { body: stripThinkingParams(body),
+      reason: `网关不支持思考参数（${keys.join('/')}），已去掉后重试` };
+  }
   const advisors = skillManager.getRetryAdvisors(ctx);
   for (const { fn, skillId } of advisors) {
     try {

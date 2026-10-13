@@ -1,0 +1,804 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/K0nd1us/QQ-agent.git",
+  "branch": "main",
+  "commit": "11577baad321d1774caf0765d791c211072bfa83",
+  "upstreamVersion": "0.4.0",
+  "downstreamSource": "b4f8d11421624e6f23dcb026289fee52a18ee2fb",
+  "files": [
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "blob": "b112d7e059a9c0904df756529e2455b230a7c8fe",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": ".zcodeignore",
+      "mode": "100644",
+      "blob": "44b2359dd1c3bfc9c52059c5448a13372b19c758"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "blob": "70a495443ee1018813fac25d4f719e7db39ace87"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "blob": "945a897774aa85b94cb1e94b46568765494f0112",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "assets/icon.ico",
+      "mode": "100644",
+      "blob": "c43973ce54144af81e6bf19f5abd3e87261b4343",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "assets/icon.png",
+      "mode": "100644",
+      "blob": "cb2cd9abf53c5e880600e68cb5670551cb2ad6dc",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "build/installer.nsh",
+      "mode": "100644",
+      "blob": "902fc3e13a7dcffde4b7e4e255197f98ad6f83a8"
+    },
+    {
+      "path": "community.key.example",
+      "mode": "100644",
+      "blob": "c106908fc783780b22a7782ae7b4892e071df228"
+    },
+    {
+      "path": "doc/extend_development/multi-instance.md",
+      "mode": "100644",
+      "blob": "50c4cf89a69354f902bd46255950c34c6482febe"
+    },
+    {
+      "path": "doc/extend_development/plugin-development.md",
+      "mode": "100644",
+      "blob": "cbfaa5fdf4384e41d33453472879c6e0547436f1",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "doc/extend_development/prompt-pipeline.md",
+      "mode": "100644",
+      "blob": "4108e714c4c3ad79870f8b0880728cdf6b1817ae"
+    },
+    {
+      "path": "doc/extend_development/skill-development.md",
+      "mode": "100644",
+      "blob": "79af7fe9cd16bfac3531206f47420ac32738dbd5",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "doc/extend_development/skill-guide-for-beginners.md",
+      "mode": "100644",
+      "blob": "ee9b4ee1f9dc0efebbea410f4d1aaf2d27fa03a0"
+    },
+    {
+      "path": "doc/extend_development/skill-reference.md",
+      "mode": "100644",
+      "blob": "552a3842e2649fce9a3ac0688cb44f782ba9d144",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "doc/extend_development/skill-system.md",
+      "mode": "100644",
+      "blob": "fe61dd753ebd303ad5da18b07cdf12cce9c89be6"
+    },
+    {
+      "path": "doc/extend_development/snowluma-capabilities.md",
+      "mode": "100644",
+      "blob": "68b36d5f2a8249699810375652a2ba4ed05d5679"
+    },
+    {
+      "path": "doc/extend_development/video-modes.md",
+      "mode": "100644",
+      "blob": "113574551310163d6ee0c2542fd062768c344290"
+    },
+    {
+      "path": "electron/main.js",
+      "mode": "100644",
+      "blob": "15c64a0aca91b2a1f69cfcdfc303572bf5d54788",
+      "overlay": "platform-compatibility"
+    },
+    {
+      "path": "electron/preload.cjs",
+      "mode": "100644",
+      "blob": "b7116cf031c69dd2114a6fac82f50e3e5afc8714",
+      "overlay": "platform-compatibility"
+    },
+    {
+      "path": "package-lock.json",
+      "mode": "100644",
+      "blob": "0f77d19bbf94a6a195e5cf0bb9e968acd3241653",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "package.json",
+      "mode": "100644",
+      "blob": "37dc2307e6e126b1bb8dbf84e0f6ebdb30eac429",
+      "overlay": "delivery-and-documentation"
+    },
+    {
+      "path": "scripts/apply-vision-docs.mjs",
+      "mode": "100644",
+      "blob": "1d0073fdcc9ed758c96f81abfeaf809a7ea99ebf"
+    },
+    {
+      "path": "scripts/export-prices-md.mjs",
+      "mode": "100644",
+      "blob": "4e2bff1d2e432032b99140a933c6c54a268524be"
+    },
+    {
+      "path": "scripts/export-prices.mjs",
+      "mode": "100644",
+      "blob": "c7c3713f9646731a333152f25584d164165bd672"
+    },
+    {
+      "path": "scripts/gen-icon.mjs",
+      "mode": "100644",
+      "blob": "82af83927ea9eae839eab77f7132d200ac0efa12"
+    },
+    {
+      "path": "scripts/judge-check.mjs",
+      "mode": "100644",
+      "blob": "2eabe14d9d80ce23604f16985eb71dfeb429e209"
+    },
+    {
+      "path": "scripts/lib/download.mjs",
+      "mode": "100644",
+      "blob": "3f2695f2f8a88989cef8b59ad6250e90d582ffcb"
+    },
+    {
+      "path": "scripts/lib/qq-installer.mjs",
+      "mode": "100644",
+      "blob": "9e841ac95d2ec7429c91bf0ab829e5958b9712b0"
+    },
+    {
+      "path": "scripts/link-runtime-junctions.ps1",
+      "mode": "100644",
+      "blob": "6a7574a4199bed530405eb71baaed2d6951f9977"
+    },
+    {
+      "path": "scripts/new-skill.mjs",
+      "mode": "100644",
+      "blob": "502ce5dbfbe799cf6cc89bb2a898932ec9425840"
+    },
+    {
+      "path": "scripts/pack-qq-portable.mjs",
+      "mode": "100644",
+      "blob": "78a0a84ef1e50773cf8a43572e0ff163b8a9aa76"
+    },
+    {
+      "path": "scripts/preload-check.mjs",
+      "mode": "100644",
+      "blob": "bed333391d7278bd7d55f736d3ebedd83dd5cd55"
+    },
+    {
+      "path": "scripts/protocol-check.mjs",
+      "mode": "100644",
+      "blob": "37d2275a014ae8c71bddcd6dcdea3b6bf17a11e4"
+    },
+    {
+      "path": "scripts/sanitize-release.mjs",
+      "mode": "100644",
+      "blob": "5af1259d701800bad9a375adbf63e0938b858329"
+    },
+    {
+      "path": "scripts/setup-napcat.mjs",
+      "mode": "100644",
+      "blob": "fb4a7c8354a826a0ce4d8d35e79aeac16aaca943"
+    },
+    {
+      "path": "scripts/setup-second-instance.mjs",
+      "mode": "100644",
+      "blob": "dbef2adca4b15c63382b315589a40beb6551a797"
+    },
+    {
+      "path": "scripts/setup.mjs",
+      "mode": "100644",
+      "blob": "4d66e135f9072eda4655cbb9ff99ebbf42778e08"
+    },
+    {
+      "path": "server/community-api.service",
+      "mode": "100644",
+      "blob": "07d0379fdefe88e85692579215630626d5b59c94"
+    },
+    {
+      "path": "server/community_app.py",
+      "mode": "100644",
+      "blob": "140af33996444fdb3ce0501cdd0d3d62898be343"
+    },
+    {
+      "path": "src/app.js",
+      "mode": "100644",
+      "blob": "971c256a779a4bd7159f2cd5c24d239d640898ed",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/community.js",
+      "mode": "100644",
+      "blob": "d733a94f047cddbc2b35ea2b0338d7476137275b"
+    },
+    {
+      "path": "src/config.js",
+      "mode": "100644",
+      "blob": "9a7f636bd2419e0cbbf83555beb5df67dfba67b1",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/gif-to-video.js",
+      "mode": "100644",
+      "blob": "19fd79fe5f6c08f85a595f5be50e8d55472e3bd1"
+    },
+    {
+      "path": "src/holidays.js",
+      "mode": "100644",
+      "blob": "069d0193fd6fe4f28bbca0023ceb2533b088c12d"
+    },
+    {
+      "path": "src/image-compress.js",
+      "mode": "100644",
+      "blob": "c938fcfb3352a56c55b64e9e6c8eae9eb6ddc2fd"
+    },
+    {
+      "path": "src/image-type.js",
+      "mode": "100644",
+      "blob": "9bcc6824b1d703a3c366ef180ace46a1d4dfa83f"
+    },
+    {
+      "path": "src/instance-lock.js",
+      "mode": "100644",
+      "blob": "24b8f190268403e50b7a48d16826358eb3d5b865"
+    },
+    {
+      "path": "src/llm.js",
+      "mode": "100644",
+      "blob": "8246c1f993da6e126545842832144e88066d885d",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/logger.js",
+      "mode": "100644",
+      "blob": "e23a1f843673aa50942d0ce41561b15c50acb9a2"
+    },
+    {
+      "path": "src/market.js",
+      "mode": "100644",
+      "blob": "46a597f28025d177329918b7cfd75ceef59d52cd",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/md-to-plain.js",
+      "mode": "100644",
+      "blob": "021ab92adacbb837161860471e04430d08ae03bf"
+    },
+    {
+      "path": "src/media-links.js",
+      "mode": "100644",
+      "blob": "2c8c013721d551aadf44507bfc8f0c818117e239"
+    },
+    {
+      "path": "src/memory.js",
+      "mode": "100644",
+      "blob": "6a5ff850733815229439f936623e6b836fe9e48f",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/model-prices.js",
+      "mode": "100644",
+      "blob": "291c1ac64b1fed131e98d45ae31ed5ae3ade0cde"
+    },
+    {
+      "path": "src/model-vision-docs.js",
+      "mode": "100644",
+      "blob": "c2114896c52012666009307b05e938c9a9711252"
+    },
+    {
+      "path": "src/onebot.js",
+      "mode": "100644",
+      "blob": "432f9a9778f41da1862cb7d38e38b1b323447d11"
+    },
+    {
+      "path": "src/orchestrator.js",
+      "mode": "100644",
+      "blob": "0717dcfb1ccbeabcbd95a17dd8d9327dde774470",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/personas.js",
+      "mode": "100644",
+      "blob": "fe5283df36edb437b9e9daffc8b95ec50e071d06",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/plugin-loader.js",
+      "mode": "100644",
+      "blob": "175599100565fa77967ff3771ae91915deee6831",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/price-feed.js",
+      "mode": "100644",
+      "blob": "975ba41f129f0d91579f3eda22a488b3962f06bc"
+    },
+    {
+      "path": "src/profile.js",
+      "mode": "100644",
+      "blob": "b4c9ac4e0c10c4583a826ffaf5832ef3e072f21c"
+    },
+    {
+      "path": "src/prompt.js",
+      "mode": "100644",
+      "blob": "e6e831bb5cb3c9ab581dd26c2f3f74c119958d56",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/providers.js",
+      "mode": "100644",
+      "blob": "d19d91d4ec01c4707966421455380479928886a2",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/reminders.js",
+      "mode": "100644",
+      "blob": "71a10922df6326521de154acf9d3d6ed580f7fea"
+    },
+    {
+      "path": "src/reply-rescue.js",
+      "mode": "100644",
+      "blob": "fd98ef8a102449f907f0bc7364eb7389bf7cf93b"
+    },
+    {
+      "path": "src/routes.js",
+      "mode": "100644",
+      "blob": "c2d8faedc408030e09e74cf53d0d95ca8fab384b",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/safe-fetch.js",
+      "mode": "100644",
+      "blob": "dd54647a6a88c22976c92ffbb0f2a93bb27a4492",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/sender.js",
+      "mode": "100644",
+      "blob": "be61116942313681e6c9e9170f7305b672e5a1fb",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/server.js",
+      "mode": "100644",
+      "blob": "eb03da6d729bbac8dce39774f2acf28b53259069",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/sessions.js",
+      "mode": "100644",
+      "blob": "9812335378ab7d0cbcb657985388ff599f94b459",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/skills/capabilities.js",
+      "mode": "100644",
+      "blob": "ab593b6cf76ad017ca9adbdc31eb81e19e014239"
+    },
+    {
+      "path": "src/skills/config.js",
+      "mode": "100644",
+      "blob": "37319af6a7754e0a1499f6ae5886aa499bbc497a"
+    },
+    {
+      "path": "src/skills/errors.js",
+      "mode": "100644",
+      "blob": "f4364a87d4fad1baf92b5ae867aeb4bb84437c12"
+    },
+    {
+      "path": "src/skills/manager.js",
+      "mode": "100644",
+      "blob": "9fb423677ec9f0568441d50c6ffb7017c5bbf00f"
+    },
+    {
+      "path": "src/skills/manifest.js",
+      "mode": "100644",
+      "blob": "1bd7524c33c4c18db0f2a11a636c851276071f56"
+    },
+    {
+      "path": "src/skills/registry.js",
+      "mode": "100644",
+      "blob": "f73918be7f491abcc38109a926c36117593030e8"
+    },
+    {
+      "path": "src/sticker-manager.js",
+      "mode": "100644",
+      "blob": "4d99d299719502c3e2ef0b84ac18abee65f0f3d3",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/stickers.js",
+      "mode": "100644",
+      "blob": "8f60e0d06fe5616a6159cc6aa980bea656e69a5c",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/store.js",
+      "mode": "100644",
+      "blob": "9172146962fba724ad1f893f224da19aeedd6340",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/telemetry.js",
+      "mode": "100644",
+      "blob": "5db9c804a4794758ccff33b3648045161d8631c9"
+    },
+    {
+      "path": "src/thinking.js",
+      "mode": "100644",
+      "blob": "f48cb1f0986b4344c1d17a5b47ae544925a94d79"
+    },
+    {
+      "path": "src/tier-slider.js",
+      "mode": "100644",
+      "blob": "a0acd6cf08239658dc7975f07cc5e933b5deab7e"
+    },
+    {
+      "path": "src/tool-registry.js",
+      "mode": "100644",
+      "blob": "6555735e3244c940d7745e183d2ab96598d5cbc3",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/tools.js",
+      "mode": "100644",
+      "blob": "83c52eefdb63d2b98d5288a4192f54f3be8f1848",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "src/util.js",
+      "mode": "100644",
+      "blob": "bd59467d29488f5015f5fe361c5e4020bfd073f1"
+    },
+    {
+      "path": "src/video-reader.js",
+      "mode": "100644",
+      "blob": "3a0fdae113719bcb251af1f1668dbf0b098757b6"
+    },
+    {
+      "path": "src/vision-scan.js",
+      "mode": "100644",
+      "blob": "16d7ceabdb3f47b506148f9707166a635d6f67d8"
+    },
+    {
+      "path": "src/web-search.js",
+      "mode": "100644",
+      "blob": "7317da5f53e69dc7a1f65039992015a43218f623"
+    },
+    {
+      "path": "src/zip-install.js",
+      "mode": "100644",
+      "blob": "b15258bf3ef8b5a97e4c59e34bc77bf856dd1e09",
+      "overlay": "core-adaptation"
+    },
+    {
+      "path": "test/_harness.mjs",
+      "mode": "100644",
+      "blob": "a16ffbe1dfc04c5a2ace1f10effa8432dcdd81db",
+      "overlay": "test-fixture-compatibility"
+    },
+    {
+      "path": "test/_ui-load.mjs",
+      "mode": "100644",
+      "blob": "95c816e5ceb79af3c79dcf9e4aef891f0e47df6b"
+    },
+    {
+      "path": "test/community-test.mjs",
+      "mode": "100644",
+      "blob": "a83e89079fb17518b0b7426ec4a41197f4c9e8af"
+    },
+    {
+      "path": "test/coverage-e2e.mjs",
+      "mode": "100644",
+      "blob": "3b4a8a9fe68688819131d4c2010dd25c74974eda"
+    },
+    {
+      "path": "test/coverage-http.mjs",
+      "mode": "100644",
+      "blob": "a0ae01ca30ff3ba763a6a35121c787cdf6219b1a"
+    },
+    {
+      "path": "test/coverage-offline.mjs",
+      "mode": "100644",
+      "blob": "a7c90c3e8972268443f2a84a44e8a94617b72f74",
+      "overlay": "test-fixture-compatibility"
+    },
+    {
+      "path": "test/coverage-ui.mjs",
+      "mode": "100644",
+      "blob": "b0af7722214a360ece9a6022739168f0f0ceb751"
+    },
+    {
+      "path": "test/coverage-wiring.mjs",
+      "mode": "100644",
+      "blob": "a3d7d4b11d547707862287cb38f02db3f9bea8b0"
+    },
+    {
+      "path": "test/judge-cases.json",
+      "mode": "100644",
+      "blob": "33313739220794d8fd6069e067ea1c104cb9a364"
+    },
+    {
+      "path": "test/market-zip-test.mjs",
+      "mode": "100644",
+      "blob": "863cdf7b8756c0d9874cffac7290be5985b02a1c"
+    },
+    {
+      "path": "test/message-id-test.mjs",
+      "mode": "100644",
+      "blob": "4fafe5d2044f07e386aa468c3d049684dfe3739b"
+    },
+    {
+      "path": "test/onebot-whitelist-test.mjs",
+      "mode": "100644",
+      "blob": "bca37f7a84775a964c237d25364c2869da6c19bd"
+    },
+    {
+      "path": "test/prompt-anchor-test.mjs",
+      "mode": "100644",
+      "blob": "290e35890afc9cc7b5e59d286db3c5fea9246d20"
+    },
+    {
+      "path": "test/qq-pack.mjs",
+      "mode": "100644",
+      "blob": "4f96b3ce62ae1f0c009b5dee615760cd1baf3f98"
+    },
+    {
+      "path": "test/qq-process-detect.mjs",
+      "mode": "100644",
+      "blob": "364ca86c9796bae15cd8b40b47d60db1b02e01d8"
+    },
+    {
+      "path": "test/render-test.mjs",
+      "mode": "100644",
+      "blob": "07a3b7a026776e7924f6a8cd7bea291db71f8a41"
+    },
+    {
+      "path": "test/safe-fetch-file-test.mjs",
+      "mode": "100644",
+      "blob": "c6a168d3275a6be11c92bd0fabdafc8b99f13a9c"
+    },
+    {
+      "path": "test/scroll-test.mjs",
+      "mode": "100644",
+      "blob": "18519f3c86978b10db662d7ebcc5e9f2adb0cfa7"
+    },
+    {
+      "path": "test/selftest.mjs",
+      "mode": "100644",
+      "blob": "c05c9fae43745f35a0eb5a2e2e72796d3e99490b"
+    },
+    {
+      "path": "test/sender-file-uri-test.mjs",
+      "mode": "100644",
+      "blob": "45f1c46debdbd5c183d8b7bbc9992f4660056a62"
+    },
+    {
+      "path": "test/sender-send-path-test.mjs",
+      "mode": "100644",
+      "blob": "30c74d1111acda9adb76daf30e03a43d23b7126b"
+    },
+    {
+      "path": "test/setup-download.mjs",
+      "mode": "100644",
+      "blob": "8c3e5e872f508e39c876429910136ce34e1dd622"
+    },
+    {
+      "path": "test/setup-qq-version.mjs",
+      "mode": "100644",
+      "blob": "5fc30fef452374e531bc28e1fc52540dc6d41c8d"
+    },
+    {
+      "path": "test/skill-modal-ui.mjs",
+      "mode": "100644",
+      "blob": "46e7b8fe033d44566a62ec80071723f6d6580cba"
+    },
+    {
+      "path": "test/skill-test.mjs",
+      "mode": "100644",
+      "blob": "815ab86e55222e5ab0cfc9144fb5fe40de638500"
+    },
+    {
+      "path": "test/sticker-collect-test.mjs",
+      "mode": "100644",
+      "blob": "c0cac41f7f717280252ec1ff8bb8f91f9bbb3b99"
+    },
+    {
+      "path": "test/sticker-context.mjs",
+      "mode": "100644",
+      "blob": "23d3316d8c1afdd8299a46f65eab6bd8d0f6a662"
+    },
+    {
+      "path": "test/test-prompt.mjs",
+      "mode": "100644",
+      "blob": "e58965edec412ed8e6d5ba7a9b0f06e9151d1113"
+    },
+    {
+      "path": "test/tools-skill-audit.mjs",
+      "mode": "100644",
+      "blob": "bdaa00d2516af4366417cb43fd62a34b9fe1b708"
+    },
+    {
+      "path": "test/usage-daily-test.mjs",
+      "mode": "100644",
+      "blob": "73513a55f8278ce29195f535ef80149f4fea9954"
+    },
+    {
+      "path": "test/usage-e2e.mjs",
+      "mode": "100644",
+      "blob": "171740690af28c5dfe04daed744754058fe2ae43"
+    },
+    {
+      "path": "test/vendor-mirror-test.mjs",
+      "mode": "100644",
+      "blob": "5250039423caf11ea7e84dbb2d2c4d8a5fcc1cd8"
+    },
+    {
+      "path": "test/wake-semantics-test.mjs",
+      "mode": "100644",
+      "blob": "74769c35d27d38802cfdd21ca2e0366362ab3ead",
+      "overlay": "test-fixture-compatibility"
+    },
+    {
+      "path": "test/web-search-parse.mjs",
+      "mode": "100644",
+      "blob": "ff44e7b9cbb2d30820ee094b8ab013f62a700865"
+    },
+    {
+      "path": "ui/app.js",
+      "mode": "100644",
+      "blob": "4d27d5588fe1745327a81a8fbb4b0750742ce6ef"
+    },
+    {
+      "path": "ui/app/00-core.js",
+      "mode": "100644",
+      "blob": "816bb7c06bb755a787ea48125ba061c4c805281f",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/01-boot.js",
+      "mode": "100644",
+      "blob": "744dc4bd0b0f1e8a1468e37aba3a805a3c800969",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/02-sse-sessions.js",
+      "mode": "100644",
+      "blob": "132c76ba89a618f8f7198e8c8b90617002dc691e",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/03-snowluma.js",
+      "mode": "100644",
+      "blob": "efefda091b7d9d8385837aa47c226e8af4f5fd73",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/04-archive-usage.js",
+      "mode": "100644",
+      "blob": "0290cf19bb4b0b6520dd3e0df0c86eca455a436d",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/05-memory-settings.js",
+      "mode": "100644",
+      "blob": "ab82804b1ad47b280512ac2e59cdedb81f5b1f92",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/06-settings-render.js",
+      "mode": "100644",
+      "blob": "2f1bbf5c322c58ea68fc85602228d9b7715bebf1",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/07-settings-events.js",
+      "mode": "100644",
+      "blob": "99a3e8e66e05684249837bb2d08726d0e5e4e26c",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/08-modals.js",
+      "mode": "100644",
+      "blob": "fbf350eb9a60d848999a2e71691be554f68542a2",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/09-community.js",
+      "mode": "100644",
+      "blob": "de5d19eb4988c51f6eb5018c2f526fb43ad14bd4",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/10-feedback.js",
+      "mode": "100644",
+      "blob": "8f17ae37b8b24f18c32a28e7610d6f716142a98e",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/11-init.js",
+      "mode": "100644",
+      "blob": "495647169f3d0bdff1443c8e325047a5e31a171d",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/app/12-concept2-ui.js",
+      "mode": "100644",
+      "blob": "f220791276ab2209fe75af20e10e889d99bf857c"
+    },
+    {
+      "path": "ui/captcha-sw.js",
+      "mode": "100644",
+      "blob": "f6c45236acf690fef38f57080b5890643522dd87"
+    },
+    {
+      "path": "ui/group-qrcode.jpg",
+      "mode": "100644",
+      "blob": "af0b8802365b8f95278c9d71c5d0963f8befd817",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/index.html",
+      "mode": "100644",
+      "blob": "353d94fe92d307b63ce42dac64c78181ee94a98f",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/landing.html",
+      "mode": "100644",
+      "blob": "bf1720315c872c2a70c7a4d5ce52f15cba957f67",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/persona-plaza/index.html",
+      "mode": "100644",
+      "blob": "f8cb51ee4b9f3c50eea59d53d05d6f4fc9a146c9",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/plugin-market/index.html",
+      "mode": "100644",
+      "blob": "68c55ed4d0f774fd529e4c93c51d5f5f1e1ea725",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/skill-market/index.html",
+      "mode": "100644",
+      "blob": "6a7aa0d1a6f84ff9634ef9a7bb34d4e827dfc2a6",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/style.css",
+      "mode": "100644",
+      "blob": "24b8ff8030ff0d674e17a70192481ae8d250b76d",
+      "overlay": "maintained-console"
+    },
+    {
+      "path": "ui/vendor/price-match.js",
+      "mode": "100644",
+      "blob": "2e563e97b413f13583e460ea7102512c48b1e3c5"
+    },
+    {
+      "path": "ui/vendor/tier-slider.js",
+      "mode": "100644",
+      "blob": "3a354b3f729e08022f3c16abe491c7a1d0af4780"
+    },
+    {
+      "path": "启动QQ机器人.bat",
+      "mode": "100644",
+      "blob": "8b1867745baa4e6cf439bcea6f2d437bde32162d"
+    }
+  ]
+}

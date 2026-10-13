@@ -1,7 +1,7 @@
 {
   "id": "owner-identity",
   "name": "主人识别",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "category": "message",
   "description": "只按 QQ 号认定主人（不认名字），可为主人切换专属人设与说话风格。",
@@ -27,7 +27,10 @@
     "scope": {
       "type": "enum",
       "label": "人设切换时机",
-      "values": ["caller", "any"],
+      "values": [
+        "caller",
+        "any"
+      ],
       "description": "caller = 主人在这一批消息里叫了机器人才切换（推荐）；any = 主人出现在这批消息里就切换。"
     },
     "personaEnabled": {

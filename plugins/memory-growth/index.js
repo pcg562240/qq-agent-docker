@@ -1,3 +1,5 @@
+import { chatCompletion } from '../../src/llm.js';
+import { appendContext } from '../../src/extension-context.js';
 // memory-growth —— 记忆库自增长（V0.3.1 确定性插件）
 //
 // 宿主来源：部署版 src/memory-growth.js（58KB，含全部演化特性：去重加固/相似合并/
@@ -31,6 +33,13 @@ let semanticProbeState = { ok: false, reason: '未探测', probeAt: 0 };
 let stats = { extracted: 0, pending: 0, approved: 0, rejected: 0, archived: 0, conflicts: 0 };
 
 let api = null;
+let epoch = 0;
+let extracting = false;
+let controller = null;
+let injectionTimer = null;
+const queued = new Map();
+const cached = new Map();
+const pending = new Map();
 
 export function setup(a) {
   api = a;
@@ -44,22 +53,24 @@ export function available() {
 }
 
 export async function activate(ctx) {
-  // 1) Mongo 软依赖探活（后台，不阻塞）
+  const generation = ++epoch;
+  controller?.abort(); controller = new AbortController();
+  const c = cfg();
+  const handle = new MongoHandle({ uri: c.mongoUri, db: c.mongoDb });
   mongoProbeState = { ok: false, reason: '探测中', probeAt: Date.now() };
-  (async () => {
-    try {
-      const c = cfg();
-      mongoHandle = new MongoHandle({ uri: c.mongoUri, db: c.mongoDb });
-      await mongoHandle.connect({ serverSelectionTimeoutMs: 800 });
-      await ensureIndexes(mongoHandle.db);
-      mongoProbeState = { ok: true, reason: 'connected', probeAt: Date.now() };
-      api.log?.('memory-growth: MongoDB 已连接 ' + c.mongoUri + '/' + c.mongoDb);
-    } catch (e) {
-      mongoHandle = null;
-      mongoProbeState = { ok: false, reason: e?.message ?? String(e), probeAt: Date.now() };
-      api.log?.('memory-growth: MongoDB 不可用 → 记忆库不工作（' + e?.message + '），不卡聊天');
-    }
-  })();
+  try {
+    await handle.connect({ serverSelectionTimeoutMs: 800 });
+    if (generation !== epoch) { await handle.close(); return; }
+    mongoHandle = handle;
+    await ensureIndexes(handle.db);
+    if (generation !== epoch) { await handle.close(); return; }
+    mongoProbeState = { ok: true, reason: 'connected', probeAt: Date.now() };
+  } catch {
+    await handle.close();
+    if (generation !== epoch) return;
+    mongoHandle = null;
+    mongoProbeState = { ok: false, reason: '数据库连接失败（检查地址与凭据）', probeAt: Date.now() };
+  }
 
   // 2) 语义向量服务探活（软依赖）
   const c0 = cfg();
@@ -76,11 +87,16 @@ export async function activate(ctx) {
     api.log?.('memory-growth: 语义向量服务 ' + (semanticProbeState.ok ? '已连接' : '不可用 → 退回哈希向量'));
   }
 
+  if (generation !== epoch) return;
+  if (injectionTimer) clearInterval(injectionTimer);
+  injectionTimer = setInterval(() => refreshCache().catch(() => {}), 30000);
+  injectionTimer.unref?.();
+
   // 3) 定时抽取 tick（每 10 分钟，仅在新消息时调模型；宿主语义照搬）
-  if (c0.inject === true || c0.extractionEnabled !== false) {
+  if (c0.extractionEnabled === true) {
     extractionTimer = setInterval(() => {
       runExtraction().catch((e) => api.warn?.('memory-growth: 抽取 tick 失败 ' + (e?.message ?? e)));
-    }, c0.extractionIntervalMs ?? 600_000);
+    }, Math.max(60_000, Number(c0.extractionIntervalMs) || 600_000));
     extractionTimer.unref?.();
     api.log?.('memory-growth: 定时抽取已启动（间隔 ' + (c0.extractionIntervalMs ?? 600000) + 'ms）');
   }
@@ -104,13 +120,15 @@ export async function activate(ctx) {
  * 宿主语义：weeklyCleanup 开关 + cleanupDays 冷多久 + cleanupMaxMention 提及次数门槛
  *          + pinnedProtected 固定项不清理。
  */
-async function runCleanup() {
+async function runCleanup({ chatKey } = {}) {
   const c = cfg();
   if (!mongoProbeState.ok || !mongoHandle) return { ok: false, error: 'Mongo 不可用' };
   const days = Math.max(1, Number(c.cleanupDays) || 90);
-  const maxMention = Math.max(0, Number(c.cleanupMaxMention) || 1);
+  const maxMention = Math.max(0, Number.isFinite(Number(c.cleanupMaxMention)) ? Number(c.cleanupMaxMention) : 1);
   const cutoff = new Date(Date.now() - days * 86400_000);
   const filter = {
+    tenant_id: tenantFor(chatKey, c),
+    ...(chatKey ? { chat_key: chatKey } : {}),
     archived: { $ne: true },
     status: { $ne: 'rejected' },
     mention_count: { $lte: maxMention },
@@ -132,19 +150,18 @@ async function runCleanup() {
 }
 
 export async function deactivate(ctx) {
-  // 必须清掉 activate 建的东西
-  if (extractionTimer) { clearInterval(extractionTimer); extractionTimer = null; }
-  if (cleanupTimer) { clearInterval(cleanupTimer); cleanupTimer = null; }
-  try { await mongoHandle?.close(); } catch {}
-  mongoHandle = null;
-  api.log?.('memory-growth: 已停用，抽取 tick 与 Mongo 连接全部清理');
+  epoch++; controller?.abort(); controller = null;
+  if (injectionTimer) clearInterval(injectionTimer); injectionTimer = null;
+  if (extractionTimer) clearInterval(extractionTimer); extractionTimer = null;
+  if (cleanupTimer) clearInterval(cleanupTimer); cleanupTimer = null;
+  queued.clear(); cached.clear(); pending.clear();
+  mongoProbeState = { ok: false, reason: '已停用', probeAt: Date.now() };
+  // Detach synchronously: the manager may start a new activation before close resolves.
+  const oldMongo = mongoHandle; mongoHandle = null;
+  try { await oldMongo?.close(); } catch {}
 }
 
-export function dispose() {
-  mongoHandle = null;
-  extractionTimer = null;
-  cleanupTimer = null;
-}
+export function dispose() { return deactivate(); }
 
 // ── providers ────────────────────────────────────────────────────
 export const providers = {
@@ -159,7 +176,7 @@ export const providers = {
     const c = cfg();
     if (!mongoProbeState.ok || !mongoHandle) return { hits: [], minScore: c.minScore ?? 0.48, degraded: true, reason: 'Mongo 不可用' };
     const tenant = tenantFor(chatKey, c);
-    const r = await recallMemory(mongoHandle.db, c, { tenant, query, topK: topK ?? 5 });
+    const r = await recallMemory(mongoHandle.db, c, { tenant, chatKey, query, topK: topK ?? 5 });
     return r;
   },
 
@@ -178,7 +195,7 @@ export const providers = {
    * 入参：{} —— 门槛全走设置（cleanupDays / cleanupMaxMention / pinnedProtected）。
    * 返回：{ ok, archived, days, maxMention }
    */
-  'memory.cleanup': async () => runCleanup(),
+  'memory.cleanup': async (args = {}) => runCleanup(args),
 
   /** 插件整体状态（控制台「记忆库」页查询用）。 */
   'memory.growth-status': async () => ({
@@ -209,7 +226,7 @@ export const providers = {
     if (!mongoProbeState.ok || !mongoHandle) return { ok: false, error: 'Mongo 不可用，无法审核' };
     const t = tenant ?? tenantFor(chatKey, c);
     if (action === 'undo') {
-      const r = await undoPromote(mongoHandle.db, t, memoryId);
+      const r = await undoPromote(mongoHandle.db, t, memoryId, chatKey);
       return r;
     }
     const r = await reviewCandidate(mongoHandle.db, c, { action, memoryId, chatKey, tenant: t });
@@ -228,23 +245,23 @@ export const providers = {
    * 入参：{ op:'forget'|'archive'|'unarchive', memoryIds?, days?, tenant }
    * 返回：{ ok, op, count, error? }
    */
-  'memory.lifecycle': async ({ op, memoryIds, days, tenant } = {}) => {
+  'memory.lifecycle': async ({ op, memoryIds, days, tenant, chatKey, confirm } = {}) => {
     const c = cfg();
     if (!mongoProbeState.ok || !mongoHandle) return { ok: false, error: 'Mongo 不可用，无法操作生命周期' };
-    const t = tenant ?? tenantFor(null, c);
+    const t = tenant ?? tenantFor(chatKey, c);
     if (op === 'forget') {
       const ids = Array.isArray(memoryIds) && memoryIds.length ? memoryIds : [memoryIds];
-      const r = await forgetOne(mongoHandle.db, t, ids);
+      const r = await forgetOne(mongoHandle.db, t, ids, chatKey);
       stats.archived += r.count ?? 0;
       return { ok: r.ok, op, count: r.count, error: r.error };
     }
     if (op === 'archive') {
-      const r = await archiveOne(mongoHandle.db, c, { tenant: t, memoryIds: Array.isArray(memoryIds) ? memoryIds : null, days });
+      const r = await archiveOne(mongoHandle.db, c, { tenant: t, chatKey, confirm, memoryIds: Array.isArray(memoryIds) ? memoryIds : null, days });
       return { ok: r.ok, op, count: r.count ?? r.preview, dryRun: !!r.preview && r.applied === false, error: r.error };
     }
     if (op === 'unarchive') {
       const ids = Array.isArray(memoryIds) && memoryIds.length ? memoryIds : [memoryIds];
-      const r = await unarchiveOne(mongoHandle.db, t, ids);
+      const r = await unarchiveOne(mongoHandle.db, t, ids, chatKey);
       return { ok: r.ok, op, count: r.count, error: r.error };
     }
     // pin/unpin：钉住的记忆**永不被定期清理自动归档**（对应宿主 pinnedProtected 设置）。
@@ -261,7 +278,7 @@ export const providers = {
         if (strIds.length) or.push({ memory_id: { $in: strIds } });
         if (!or.length) return { ok: false, op, error: 'id 格式不认识' };
         const res = await mongoHandle.db.collection('memory_items').updateMany(
-          { tenant_id: t, $or: or },
+          { tenant_id: t, ...(chatKey ? { chat_key: chatKey } : {}), $or: or },
           { $set: { pinned: op === 'pin', pinned_at: new Date() } },
         );
         return { ok: true, op, count: res?.modifiedCount ?? 0 };
@@ -368,20 +385,60 @@ export const providers = {
 };
 
 // ── 抽取 tick（宿主每 10 分钟、仅新消息时调模型；隐私闸过滤）──────
-let lastExtractionTs = 0;
-async function runExtraction({ chatKey, sinceTs } = {}) {
-  const c = cfg();
-  if (!mongoProbeState.ok || !mongoHandle) return { ok: false, error: 'Mongo 不可用，抽取跳过（降级）' };
-  const from = sinceTs ?? lastExtractionTs;
-  lastExtractionTs = Date.now();
-  // 宿主抽取逻辑在 mg-extract.js：拉新消息 → 调模型抽 event/meme/relation →
-  // 隐私闸过滤手机号/身份证/邮箱/密码 → 归一化 content_key → 去重/相似/冲突 → 入库
-  const r = await extractMemories(mongoHandle.db, c, { chatKey, sinceTs: from });
-  stats.extracted += r.newCount ?? 0;
-  stats.pending += (r.newCount ?? 0);
-  stats.conflicts += r.conflicts ?? 0;
-  return { ok: true, newCount: r.newCount ?? 0, duplicates: r.duplicates ?? 0, reopened: r.reopened ?? 0, conflicts: r.conflicts ?? 0 };
+async function refreshCache() {
+  if (cfg().inject !== true || !mongoHandle?.db) return;
+  const generation = epoch;
+  for (const key of cached.keys()) {
+    const rows = await mongoHandle.db.collection('memory_items').find({ tenant_id: tenantFor(key, cfg()), chat_key: key, status: { $in: ['active', 'approved'] }, archived: { $ne: true } }).sort({ last_seen_at: -1 }).limit(300).toArray();
+    if (generation !== epoch) return;
+    cached.set(key, rows);
+  }
 }
+async function runExtraction({ chatKey } = {}) {
+  if (extracting) return { ok: false, error: '已有抽取运行中' };
+  if (cfg().extractionEnabled !== true) return { ok: false, error: '自动抽取未开启（需明确启用后才调用模型）' };
+  if (!mongoHandle?.db || !mongoProbeState.ok) return { ok: false, error: 'Mongo 不可用' };
+  extracting = true;
+  const generation = epoch, signal = controller?.signal;
+  const result = { ok: true, newCount: 0, duplicates: 0, reopened: 0, conflicts: 0 };
+  try {
+    for (const [key, entries] of [...queued]) {
+      if (chatKey && chatKey !== key) continue;
+      if (!entries.length || generation !== epoch) continue;
+      queued.delete(key);
+      const r = await extractMemories(mongoHandle.db, cfg(), { chatKey: key, entries, llm: chatCompletion, signal });
+      for (const k of ['newCount', 'duplicates', 'reopened', 'conflicts']) result[k] += r[k] || 0;
+    }
+    stats.extracted += result.newCount; stats.conflicts += result.conflicts;
+    await refreshCache();
+    return result;
+  } finally { extracting = false; }
+}
+export const hooks = {
+  'before-context'({ chatKey, sessionId, triggerEntries = [] } = {}) {
+    if (!chatKey) return;
+    if (cfg().extractionEnabled === true) {
+      if (!queued.has(chatKey) && queued.size >= 50) queued.delete(queued.keys().next().value);
+      const old = queued.get(chatKey) || [];
+      const ids = new Set(old.map(e => e.id));
+      const incoming = triggerEntries.filter(e => !e.self && e.text).map(e => ({ id: String(e.messageId || e.id || `${e.senderId}:${e.time}:${e.text}`), senderId: String(e.senderId || ''), text: String(e.text).slice(0, 500) }));
+      queued.set(chatKey, [...old, ...incoming.filter(e => !ids.has(e.id))].slice(-80));
+    }
+    if (cfg().inject !== true) return;
+    if (!cached.has(chatKey)) { if (cached.size >= 50) cached.delete(cached.keys().next().value); cached.set(chatKey, []); }
+    if (pending.size >= 100) pending.delete(pending.keys().next().value);
+    pending.set(sessionId || chatKey, { chatKey, query: triggerEntries.map(e => e.text || '').join(' ').slice(0, 1000) });
+  },
+  async 'before-llm-messages'({ chatKey, sessionId, messages } = {}) {
+    const key = sessionId || chatKey, p = pending.get(key); pending.delete(key);
+    if (!p || cfg().inject !== true) return;
+    const rows = cached.get(p.chatKey) || [];
+    // In-memory DB-shaped adapter: hooks do not perform network I/O.
+    const local = { collection: () => ({ find: () => ({ sort() { return this; }, limit() { return this; }, toArray: async () => rows }) }) };
+    const r = await recallMemory(local, cfg(), { tenant: tenantFor(p.chatKey, cfg()), chatKey: p.chatKey, query: p.query, topK: 3 });
+    appendContext(messages, '相关长期记忆', r.hits.map(h => h.content).join('\n').slice(0, 1500));
+  }
+};
 
 // ── 辅助 ──────────────────────────────────────────────────────────
 async function ensureIndexes(db) {
@@ -389,7 +446,7 @@ async function ensureIndexes(db) {
   try {
     await db.collection('memory_candidates').createIndexes([
       { name: 'cand_memory_id', unique: true, key: { memory_id: 1 } },
-      { name: 'chat_content_key', unique: true, key: { chat_key: 1, content_key: 1 }, sparse: true },
+      { name: 'tenant_chat_content_v2', unique: true, key: { tenant_id: 1, chat_key: 1, content_key: 1 }, sparse: true },
       { name: 'cand_status', key: { status: 1 } },
       { name: 'cand_chat_key', key: { chat_key: 1 } },
       { name: 'cand_kind', key: { kind: 1 } },
@@ -397,7 +454,7 @@ async function ensureIndexes(db) {
     ]);
     await db.collection('memory_items').createIndexes([
       { name: 'item_memory_id', unique: true, key: { memory_id: 1 } },
-      { name: 'item_chat_content', unique: true, key: { chat_key: 1, content_key: 1 }, sparse: true },
+      { name: 'item_tenant_chat_content_v2', unique: true, key: { tenant_id: 1, chat_key: 1, content_key: 1 }, sparse: true },
       { name: 'item_kind', key: { kind: 1 } },
       { name: 'item_archived', key: { archived: 1 } },
       { name: 'item_last_seen', key: { last_seen_at: -1 } },
@@ -410,9 +467,9 @@ async function ensureIndexes(db) {
   }
 }
 
-async function unarchiveOne(db, tenant, ids) {
+async function unarchiveOne(db, tenant, ids, chatKey) {
   const res = await db.collection('memory_items').updateMany(
-    { tenant_id: tenant, memory_id: { $in: ids }, archived: true },
+    { tenant_id: tenant, ...(chatKey ? { chat_key: chatKey } : {}), memory_id: { $in: ids }, archived: true },
     { $set: { archived: false } },
   );
   await db.collection('memory_audit').insertOne({ event: 'memory.unarchived', tenant_id: tenant, memory_ids: ids, ts: new Date() });

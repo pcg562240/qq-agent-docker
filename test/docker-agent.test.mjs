@@ -71,7 +71,10 @@ test('private and all group @ forms (event, structured, inline, bare) reach agen
   assert.ok(requests.length >= 2);
   assert.ok(requests.some(r => JSON.stringify(r.messages).includes('OpenID')));
   assert.ok(requests.every(r => !r.tools?.some(t => ['send_poke', 'read_forward'].includes(t.function.name))));
-  const groupPrompts=requests.map(r=>r.messages.filter(m=>m.role==='user').map(m=>String(m.content)).join('\n')).filter(s=>s.includes('当前在群聊'));
+  // Official 0.4 prompt removed the volatile '当前在群聊' paragraph.
+  // Select each known group trigger by its ID in the unread block, not by a deleted heading.
+  const groupPrompts=requests.map(r=>r.messages.filter(m=>m.role==='user').map(m=>String(m.content)).join('\n'))
+    .filter(s=>/MESSAGE_[1-4]/.test(s.split('【未读信息】以下').at(-1)));
   assert.ok(groupPrompts.length>=4);
   assert.ok(groupPrompts.every(p=>p.includes('（@我）')&&p.includes('本批新消息有人直接 @ 了你')));
   await rpc('media-boundary');

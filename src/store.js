@@ -1,5 +1,5 @@
 // 每个会话（group:xxx / private:xxx）一个不断增长的 JSON 消息存储。
-// 这是新架构的核心数据结构：模型不携带对话历史，每次运行都从这里拼接"过去状态"。
+// 这是新架构的核心数据结构：模型不携带对话历史，每次运行都从这里拼接"已读信息"。
 //
 // 条目格式：
 // {
@@ -72,13 +72,15 @@ export class ChatStore {
 
   getChatMeta(chatKey) {
     const st = this.#state(chatKey);
-    const unread = st.messages.filter((m) => !m.read).length;
+    // 未读只计他人消息（与 unreadCount / peekUnread 口径一致）——
+    // 曾经用 !m.read 把 self 也算进去，机器人自己的发言会把角标顶大。
+    const unread = st.messages.filter((m) => !m.read && !m.self).length;
     const last = st.messages[st.messages.length - 1] || null;
     return { chatKey, total: st.messages.length, unread, lastTs: last?.ts ?? 0, lastText: last?.text ?? '' };
   }
 
   /** 追加一条收到的消息（未读）。返回写入的条目。 */
-  appendIncoming(chatKey, { mid, ts, senderId, senderName, text, reply = null, media = [], isPoke = false, atMe = null }) {
+  appendIncoming(chatKey, { mid, ts, senderId, senderName, text, reply = null, media = [], isPoke = false, atMe = null, atNames = [] }) {
     const st = this.#state(chatKey);
     const entry = {
       id: st.nextLocalId++,
@@ -91,9 +93,15 @@ export class ChatStore {
       read: false,
       reply: reply || null,
       media: Array.isArray(media) ? media : [],
-      // 拍一拍事件：可作触发批（resolveContextTier 按 1 档响应），但不进【过去状态】
+      // 拍一拍事件：可作触发批（resolveContextTier 按 1 档响应），但不进【已读信息】
       isPoke: Boolean(isPoke),
-      atMe: typeof atMe === 'boolean' ? atMe : null
+      // @ 判定标记（2026-09-26）：atMe 以 @ 段的 QQ 号为准 —— 文本包含匹配
+      // 分不清"同名不同人"（群友 @ 的人与机器人重名时被误判为 @机器人）。
+      // null = 老存档未标，判定层回落文本匹配。
+      atMe: atMe === null || atMe === undefined ? null : Boolean(atMe),
+      // 渲染进 text 的 @片段原文（含 @ 前缀）：关键词判定据此剔除，
+      // 防"@ 别人的名字里带关键词"误触发。空数组 = 该消息没有 @ 段。
+      atNames: (Array.isArray(atNames) ? atNames : []).map((n) => String(n ?? '')).filter(Boolean).slice(0, 20)
     };
     st.messages.push(entry);
     this.#trim(st);
@@ -132,6 +140,34 @@ export class ChatStore {
   }
 
   /**
+   * 只 drain「从某条消息起**之后**」的未读：取走触发批，之前的旧积压单独标已读。
+   *
+   * 为什么需要它（2026-09-25 触发链路重做的补丁）：磁盘上可能遗留旧进程/
+   * 暂停期间攒下的积压未读。它们从未经过 onIncoming 的逐条判定，如果一次
+   * 触发的 drain 把它们全部吃进触发批，模型会看到一大坨"未读信息"——用户
+   * 看到的就是"积压消息被整批塞进唤醒"。正确语义：
+   *   · 触发消息 X 之后的未读 = 本批的聚批对象（X 也在内）；
+   *   · X 之前的旧未读 = 触发前就该已读的历史 → 标已读沉入【已读信息】。
+   *
+   * @param {string} chatKey
+   * @param {number} fromTs 批的起点（触发消息的 ts，含）；早于它的未读标已读
+   * @returns {{ batch: object[], archived: number }} batch = 触发批，archived = 被归档的旧未读条数
+   */
+  drainUnreadFrom(chatKey, fromTs) {
+    const st = this.#state(chatKey);
+    const unread = st.messages.filter((m) => !m.read && !m.self);
+    const batch = [];
+    let archived = 0;
+    for (const m of unread) {
+      if (m.ts >= fromTs) batch.push(m);
+      else { m.read = true; archived++; }   // 触发点之前的旧积压：沉入历史
+    }
+    for (const m of st.messages) m.read = true;   // batch 里的也置已读（作为触发批取走）
+    saveChat(st);
+    return { batch, archived };
+  }
+
+  /**
    * 把当前所有未读标记为已读，**但不取走它们**。
    *
    * 这是"档位控制是否响应"的关键：机器人判断"这次不回应"时调用它，
@@ -149,6 +185,26 @@ export class ChatStore {
     }
     if (n) saveChat(st);
     return n;
+  }
+
+  /**
+   * 把**单条**消息标记为已读（不取走）。
+   *
+   * 逐条触发判定（onIncoming）用：该条不触发会话时当场标已读、沉入历史，
+   * 不动其它未读 —— 那些是"倒计时窗口内追加的"或"上一批遗留的"，
+   * 各有自己的归宿（前者等 drain，后者等兜底或下一次触发）。
+   *
+   * @param {string} chatKey
+   * @param {number} id 消息条目的本地 id（appendIncoming 返回的 entry.id）
+   * @returns {boolean} 是否真的标记了（false = 没找到/本来就是已读）
+   */
+  markEntryRead(chatKey, id) {
+    const st = this.#state(chatKey);
+    const m = st.messages.find((x) => x.id === id);
+    if (!m || m.read || m.self) return false;
+    m.read = true;
+    saveChat(st);
+    return true;
   }
 
   /**

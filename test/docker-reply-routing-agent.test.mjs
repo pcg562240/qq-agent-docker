@@ -10,7 +10,7 @@ import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
-test('real agent replies to A while B arrives during inference, then drains B with its own anchor', { timeout: 45000 }, async t => {
+for (const mode of ['markdown', 'legacy']) test(`real agent (${mode}) replies to A while B arrives during inference, then drains B with its own anchor`, { timeout: 45000 }, async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qqa-routing-agent-'));
   let child, output = '', scenario, blocked = false;
   const observed = [];
@@ -18,8 +18,8 @@ test('real agent replies to A while B arrives during inference, then drains B wi
     try {
       let raw = ''; for await (const chunk of req) raw += chunk;
       const body = JSON.parse(raw);
-      const prompt = body.messages.find(m => m.role === 'user' && typeof m.content === 'string' && m.content.includes('【本次唤醒】以下'))?.content || '';
-      const trigger = prompt.split('【本次唤醒】以下').at(-1).split('【此刻状态】')[0];
+      const prompt = body.messages.find(m => m.role === 'user' && typeof m.content === 'string' && m.content.includes('【未读信息】以下'))?.content || '';
+      const trigger = prompt.split('【未读信息】以下').at(-1).split('【直接召唤】')[0].split('【新加入成员】')[0].split('【当前时间】')[0];
       const who = trigger.includes(scenario.a) ? 'A' : trigger.includes(scenario.b) ? 'B' : null;
       assert.ok(who, 'model should receive the triggering opaque message id');
       const mid = who === 'A' ? scenario.a : scenario.b;
@@ -27,7 +27,10 @@ test('real agent replies to A while B arrives during inference, then drains B wi
       if (who === 'A' && !tools.length && !blocked) {
         blocked = true; scenario.entered.resolve(); await scenario.release.promise;
       }
-      const args = { messages: [`${mid}:one`, `${mid}:two`], ...(scenario.quote ? { replyToMessageId: scenario.quote === 'display-hash' ? `#${mid}` : mid } : {}) };
+      const prefix = scenario.rawAt ? `<@!USER_${who}> ` : '';
+      const args = { messages: [`${prefix}${mid}:one`, `${prefix}${mid}:two`],
+        ...(scenario.at ? { atUserId: `USER_${who}` } : {}),
+        ...(scenario.quote ? { replyToMessageId: scenario.quote === 'display-hash' ? `#${mid}` : mid } : {}) };
       const name = tools.some(m => m.name === 'send_message') ? 'finish' : 'send_message';
       const message = { role: 'assistant', content: null, tool_calls: [{ id: `CALL_${who}_${name}`, type: 'function',
         function: { name, arguments: JSON.stringify(name === 'finish' ? { summary: 'done' } : args) } }] };
@@ -44,7 +47,7 @@ test('real agent replies to A while B arrives during inference, then drains B wi
     env: { ...process.env, QQ_AGENT_DOCKER: '1', QQ_AGENT_CHANNEL: 'qqbot', QQ_AGENT_DATA_DIR: dir,
       QQ_AGENT_PROFILES_ROOT: '', QQ_AGENT_ACTIVE_ROBOT: '', QQ_AGENT_CONSOLE_TOKEN: 'offline-routing-token',
       QQ_AGENT_INTERNAL_PORT: String(port), QQBOT_APP_ID: '', QQBOT_APP_SECRET: '',
-      TEST_LLM_URL: `http://127.0.0.1:${model.address().port}/v1`, TEST_QUOTE_IMAGES: '1' },
+      TEST_LLM_URL: `http://127.0.0.1:${model.address().port}/v1`, TEST_QUOTE_IMAGES: '1', TEST_GROUP_MENTION_MODE: mode },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   });
   child.stdout.on('data', d => { output += d; }); child.stderr.on('data', d => { output += d; });
@@ -54,8 +57,11 @@ test('real agent replies to A while B arrives during inference, then drains B wi
     const id = ++seq; const pending = once(child, 'message'); child.send({ action, id, ...fields });
     const [r] = await pending; assert.equal(r.id, id); assert.ok(r.ok, r.error); return r;
   }
-  for (const [i, quote] of [true, false, 'display-hash'].entries()) {
-    scenario = { a: `ROBOT1.0_.A!${i}`, b: `ROBOT1.0_.B!${i}`, quote, entered: deferred(), release: deferred() }; blocked = false;
+  const variants = [{ quote: true }, { quote: false }, { quote: 'display-hash' },
+    { quote: false, at: true }, { quote: true, at: true, rawAt: true }];
+  for (const [i, variant] of variants.entries()) {
+    const { quote } = variant;
+    scenario = { a: `ROBOT1.0_.A!${i}`, b: `ROBOT1.0_.B!${i}`, ...variant, entered: deferred(), release: deferred() }; blocked = false;
     await rpc('receive', { group: true, senderId: 'USER_A', messageId: scenario.a, content: '<@!bot> question A' });
     await scenario.entered.promise;
     // Guaranteed overlap: A's model HTTP response is still withheld here.
@@ -75,15 +81,28 @@ test('real agent replies to A while B arrives during inference, then drains B wi
     for (const s of done) {
       assert.equal(s.trigger.length, 1);
       assert.ok(s.sent.every(m => m.replySourceMessageId === s.trigger[0].mid && m.replyUserId === s.trigger[0].senderId));
+      assert.ok(s.sent.every(m => !m.text.includes('<@')));
     }
     const sent = (await rpc('snapshot')).sent.slice(i * 4);
     assert.equal(sent.length, 4, output);
     assert.deepEqual(sent.map(s => s.target.msgId), [scenario.a, scenario.a, scenario.b, scenario.b]);
-    assert.equal(sent[0].content, `${scenario.a}:one`);
+    if (mode === 'markdown') {
+    assert.equal(sent[0].markdown.content, `<qqbot-at-user id="USER_A" /> ${scenario.a}:one`);
+    assert.equal(sent[2].markdown.content, `<qqbot-at-user id="USER_B" /> ${scenario.b}:one`);
+    assert.equal(sent[3].content, `${scenario.b}:two`);
     assert.equal(sent[1].content, `${scenario.a}:two`);
+    assert.equal(sent[0].msgType, 2); assert.equal(sent[0].content, undefined);
+    assert.equal(sent[1].msgType, 0); assert.equal(sent[1].markdown, undefined);
+    } else {
+      for (const [index, who, mid] of [[0, 'A', scenario.a], [2, 'B', scenario.b]]) {
+        assert.equal(sent[index].content, `${mid}:one`);
+        assert.equal(sent[index + 1].content, `${mid}:two`);
+      }
+      assert.ok(sent.every(s => s.markdown === undefined && s.msgType !== 2));
+    }
     assert.equal(sent[0].messageReference?.message_id, quote ? scenario.a : undefined);
     assert.equal(sent[1].messageReference, undefined);
   }
-  assert.equal(observed.filter(r => r.name === 'send_message').length, 6);
+  assert.equal(observed.filter(r => r.name === 'send_message').length, variants.length * 2);
   child.kill('SIGTERM'); const [code] = await once(child, 'exit'); assert.equal(code, 0); child = null;
 });

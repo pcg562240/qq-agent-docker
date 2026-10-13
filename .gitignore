@@ -65,3 +65,6 @@ artifacts/
 *.db
 *.sqlite3-wal
 *.sqlite3-shm
+
+# Also ignore local dependency symlinks, not only directories.
+/node_modules

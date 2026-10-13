@@ -1,5 +1,7 @@
 // headless 入口：node src/server.js（不带 Electron 窗口，浏览器访问控制台）
 import { createApp } from './app.js';
+import { logger } from './logger.js';
+process.once('exit', () => logger.flush());
 
 process.on('unhandledRejection', (error) => console.error('[未处理异常]', error));
 // 未捕获异常后进程处于未定义状态（定时器丢失/连接悬空），记录后退出，

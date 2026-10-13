@@ -46,10 +46,10 @@ export class ConnectionModels {
       this.message(`已获取 ${result.models.length} 个模型，请从下方列表选择。获取列表不会更改当前模型。`, 'success');
     }).catch(() => {}));
     $('model-test').addEventListener('click', () => this.perform(async () => {
-      this.message('正在测试所填模型（发送一条简短测试请求，不向 QQ 发消息）…');
+      this.message('正在测试所填模型（仅发送简短文本，不携带技能工具，不向 QQ 发消息）…');
       const { result } = await api('/api/connection/models/test', this.input());
       const latency = Number.isFinite(result.latencyMs) ? ` · ${result.latencyMs} ms` : '';
-      this.message(`${result.ok ? '连接测试成功' : '连接测试失败'}${latency}\n${result.note || ''}`, result.ok ? 'success' : 'error');
+      this.message(`${result.ok ? '基础连接测试成功' : '基础连接测试失败'}${latency}\n${result.note || ''}`, result.ok ? 'success' : 'error');
     }).catch(() => {}));
     $('model-save').addEventListener('click', () => this.save(false).catch(() => {}));
     $('model-save-use').addEventListener('click', () => this.save(true).catch(() => {}));

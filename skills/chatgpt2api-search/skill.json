@@ -1,0 +1,50 @@
+{
+  "id": "chatgpt2api-search",
+  "name": "ChatGPT 联网搜索",
+  "version": "1.1.0",
+  "apiVersion": 1,
+  "category": "knowledge",
+  "description": "通过 chatgpt2api 获取网页搜索摘要及来源；保留独立搜索工具，并为多引擎搜索聚合提供可选来源。聚合复用本技能地址与 Key，只调用搜索，不额外执行整理模型。不自动替换现有搜索。",
+  "author": "QQ Agent local maintenance",
+  "enabledByDefault": false,
+  "permissions": [
+    "web_fetch"
+  ],
+  "capabilities": [
+    "search.chatgpt2api"
+  ],
+  "requires": [],
+  "settings": {
+    "baseUrl": "http://host.docker.internal:8030",
+    "apiKey": "",
+    "model": "",
+    "timeoutMs": 300000
+  },
+  "configSchema": {
+    "baseUrl": {
+      "type": "string",
+      "label": "chatgpt2api 服务地址",
+      "description": "先保存地址和 Key，再获取模型。Docker 访问宿主机用 http://host.docker.internal:8030；也可填写可达的局域网地址。支持根地址或 /v1。更换地址时不沿用旧 Key。"
+    },
+    "apiKey": {
+      "type": "string",
+      "label": "服务用户 API Key",
+      "secret": true,
+      "boundTo": "baseUrl",
+      "description": "填写 chatgpt2api 的业务用户 Key，不是 ChatGPT 账号 Token。留空保持原值；改服务地址后须重新填写。"
+    },
+    "model": {
+      "type": "string",
+      "label": "可选：搜索结果整理模型 ID",
+      "modelCatalog": true,
+      "description": "留空直接使用搜索接口答案。此版本 /v1/search 固定搜索模型；这里选择的模型只用于搜索后的整理，会额外消耗一次文本调用。可获取列表或手动填写，不伪装成切换搜索引擎。"
+    },
+    "timeoutMs": {
+      "type": "number",
+      "label": "等待上限（毫秒）",
+      "min": 10000,
+      "max": 600000,
+      "step": 1000
+    }
+  }
+}

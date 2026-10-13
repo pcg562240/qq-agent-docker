@@ -185,7 +185,6 @@ export class BodyStateStore {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       const tmp = this.file + '.' + process.pid + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(this.state, null, 1), 'utf8');
-      try { fs.unlinkSync(this.file); } catch {}
       fs.renameSync(tmp, this.file);
       this.dirty = false;
     } catch {}

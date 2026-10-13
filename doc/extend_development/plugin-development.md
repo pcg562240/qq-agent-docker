@@ -310,8 +310,17 @@ llm.retry-advisor    tool.guard     media.download
 ```js
 // 在另一个 Skill 里
 export function setup(api) {
-  const fn = api.capability('my.capability');     // 有就拿到，没有就是 undefined
-  if (fn) { /* 增强路径 */ } else { /* 降级，照常工作 */ }
+  api.registerTool({
+    id: 'example', name: '示例', parameters: { type: 'object', properties: {} },
+    async execute(ctx, args) {
+      if (!api.hasCapability('my.capability')) return { content: '依赖未启用', isError: true };
+      try {
+        const result = await api.capability('my.capability', args);
+        if (result === undefined) return { content: '能力未返回结果', isError: true };
+        return { content: JSON.stringify(result) };
+      } catch { return { content: '能力执行失败', isError: true }; }
+    }
+  });
 }
 ```
 
@@ -337,7 +346,7 @@ export function setup(api) {
 | 成员 | 说明 |
 |---|---|
 | `api.config()` | 读本插件设置（默认值已由 `manifest.settings` 合并） |
-| `api.capability(name, args?)` | **软依赖**取用别人的能力；没有提供者时返回 `undefined`，抛错也被吞掉 |
+| `api.capability(name, args?)` | **立即调用**能力，不返回函数；无提供者/同步异常返回 `undefined`，异步异常需 `await` + `catch` |
 | `api.hasCapability(name)` | 有没有人提供这个能力 |
 | `api.isSkillActive(id, ctx?)` | 某个 Skill 是否生效 |
 | `api.registerTool(def)` | 注册工具（**LLM 型才需要**） |

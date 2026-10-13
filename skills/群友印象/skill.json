@@ -1,7 +1,7 @@
 {
   "id": "people-memory",
   "name": "群友印象",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "category": "knowledge",
   "description": "给群友记长期印象与好感度（跨群按 QQ 号共享）。模型在聊过后自己决定记什么。",

@@ -85,6 +85,8 @@ test('connection model management HTTP integration', { timeout: 60_000 }, async 
     const before = configBytes();
     const { result } = await api(endpoint('test'), { baseUrl: modelBase + '/b', model: 'beta', providerId: 'b' });
     assert.equal(result.ok, true); assert.match(result.note, /pong/); assert.ok(result.latencyMs >= 0);
+    assert.equal(result.scope, 'text-only'); assert.match(result.note, /未验证技能工具调用/);
+    assert.equal(calls.at(-1).body.tools, undefined);
     assert.equal(calls.at(-1).body.model, 'beta'); assert.equal(calls.at(-1).body.stream, false);
     assert.equal(calls.at(-1).auth, 'Bearer FAKE_KEY_B'); assert.equal(configBytes(), before);
     assert.equal((await request(endpoint('test'), { baseUrl: modelBase })).status, 400);

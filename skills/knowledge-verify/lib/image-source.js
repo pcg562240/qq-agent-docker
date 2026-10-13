@@ -8,13 +8,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { DATA_DIR } from '../../../src/config.js';
 
 const MAX_BYTES_DEFAULT = 8 * 1024 * 1024;
 
 /** 本地文件 → Buffer（按魔数判类型，别信扩展名）。 */
-export function readLocalImage(file) {
+export function readLocalImage(file, maxBytes = MAX_BYTES_DEFAULT) {
   try {
-    const buf = fs.readFileSync(file);
+    const real = fs.realpathSync(file), root = fs.realpathSync(DATA_DIR);
+    if (!real.startsWith(root + path.sep) || !fs.statSync(real).isFile() || fs.statSync(real).size > maxBytes) return null;
+    const buf = fs.readFileSync(real);
     return sniffMime(buf) ? buf : null;
   } catch { return null; }
 }
@@ -51,16 +54,16 @@ export async function imagesFromMessage(ctx, messageId, { fetchImpl, maxBytes = 
     }
     // 2) 本地路径 → 直接读
     if (m.path && fs.existsSync(String(m.path))) {
-      const buf = readLocalImage(String(m.path));
+      const buf = readLocalImage(String(m.path), maxBytes);
       if (buf) out.push({ url: url || ('file://' + String(m.path)), buffer: buf, mime: sniffMime(buf) || 'image/jpeg' });
       continue;
     }
     // 3) data: URL → 解 base64
     if (/^data:image\//i.test(url)) {
       const mm = url.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
-      if (mm) {
+      if (mm && mm[2].length <= Math.ceil(maxBytes / 3) * 4) {
         const buf = Buffer.from(mm[2], 'base64');
-        if (buf.length && sniffMime(buf)) out.push({ url: '', buffer: buf, mime: mm[1] });
+        if (buf.length && buf.length <= maxBytes && sniffMime(buf)) out.push({ url: '', buffer: buf, mime: mm[1] });
       }
     }
   }
@@ -69,12 +72,11 @@ export async function imagesFromMessage(ctx, messageId, { fetchImpl, maxBytes = 
 
 /** 下载图片（带体积上限 + 魔数校验）。 */
 export async function downloadImage(url, { fetchImpl, maxBytes = MAX_BYTES_DEFAULT } = {}) {
-  const f = typeof fetchImpl === 'function' ? fetchImpl : globalThis.fetch;
+  if (typeof fetchImpl !== 'function') return null;
   try {
-    const res = await f(url, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length || buf.length > maxBytes) return null;
+    const res = await fetchImpl(url, maxBytes, { browseLocked: true, publicOnly: true, timeoutMs: 15000 });
+    const buf = Buffer.from(res.buffer);
+    if (!buf.length || buf.length >= maxBytes) return null;
     return sniffMime(buf) ? buf : null;      // 挡掉「链接其实返回 HTML 防盗链页」
   } catch { return null; }
 }

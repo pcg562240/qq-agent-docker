@@ -6,6 +6,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
 FROM ${NODE_IMAGE} AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production QQ_AGENT_DOCKER=1 QQ_AGENT_DATA_DIR=/data
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules

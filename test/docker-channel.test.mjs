@@ -71,6 +71,21 @@ test('group mention policy can be enabled without granting platform capabilities
   await client.receive(msg); assert.equal(events.length, 0);
   options.requireMention = false; await client.receive(msg); assert.equal(events.length, 1);
 });
+test('ingress diagnostics retain separate filtered, forwarded, duplicate, blocked and error results without bodies', async t => {
+  let mode = 'forwarded';
+  const { client, events } = await fixture(t, { onEvent: event => {
+    if (mode === 'error') throw new Error('fixture error');
+    events.push(event); return { ingress: mode };
+  } });
+  const base = { kind: 'group', groupOpenid: 'GROUP_X-y', content: 'PRIVATE_DIAGNOSTIC_BODY', senderId: 'PRIVATE_AUTHOR' };
+  await client.receive(incoming({ ...base, rawEventType: 'GROUP_MESSAGE_CREATE', messageId: 'FILTERED' }));
+  const mentioned = incoming({ ...base, rawEventType: 'GROUP_AT_MESSAGE_CREATE', messageId: 'MENTIONED' });
+  await client.receive(mentioned); await client.receive(mentioned);
+  mode = 'blocked_sender'; await client.receive({ ...mentioned, messageId: 'BLOCKED' });
+  mode = 'error'; await assert.rejects(client.receive({ ...mentioned, messageId: 'ERROR' }));
+  assert.deepEqual(client.ingress.list('group', 'GROUP_X-y').map(e => e.reason), ['error', 'blocked_sender', 'duplicate', 'forwarded', 'not_mentioned']);
+  assert.doesNotMatch(JSON.stringify(client.ingress.entries), /PRIVATE_/);
+});
 test('ordinary group event with structured is_you mention enters the channel and preserves @ tier signal', async t => {
   const { client, events } = await fixture(t);
   await client.receive(incoming({kind:'group',groupOpenid:'GROUP_X-y',rawEventType:'GROUP_MESSAGE_CREATE',

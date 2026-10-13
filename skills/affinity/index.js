@@ -302,8 +302,8 @@ function lookupPerson({ userId, name } = {}) {
 }
 
 export const providers = {
-  /** api.capability('affinity.query', { userId } | { name }) */
-  'affinity.query': (args = {}) => {
+  /** api.capability('affinity-snapshot.query', { userId } | { name }) */
+  'affinity-snapshot.query': (args = {}) => {
     const p = lookupPerson(args);
     if (!p || p.ambiguous) return p;
     const tier = TIERS[Number(p.tierId ?? tierIdOf(p.score))] || TIERS[2];
@@ -321,11 +321,11 @@ export const providers = {
 
   /**
    * 汇总统计（面板/控制台用）：档案数控、档位分布、分数段分布、好感度 Top 20。
-   * api.capability('affinity.stats')。
+   * api.capability('affinity-snapshot.stats')。
    * 说明：控制台是**档位名唯一合法的出现位置**（铁律②"档位名只在控制台出现"），
    * 所以这里直接吐内部档位名/分数，不经过语气映射。
    */
-  'affinity.stats': () => {
+  'affinity-snapshot.stats': () => {
     const s = loadState();
     if (!s) return { ok: false, reason: '缺少 <数据目录>/affinity/state.json，无法生成统计。' };
     const people = s.people || {};
@@ -366,9 +366,9 @@ export const providers = {
 
   /**
    * 人员检索（面板搜索/控制台）：QQ 号前缀（纯数字）或昵称关键字，返回扁平列表。
-   * api.capability('affinity.people', { q, limit })。
+   * api.capability('affinity-snapshot.people', { q, limit })。
    */
-  'affinity.people': ({ q = '', limit = 50 } = {}) => {
+  'affinity-snapshot.people': ({ q = '', limit = 50 } = {}) => {
     const s = loadState();
     if (!s) return { ok: false, reason: '缺少 <数据目录>/affinity/state.json，无法检索。' };
     const kw = String(q ?? '').trim();
@@ -391,8 +391,8 @@ export const providers = {
    * 入参 { q? }：非空时追加「搜索」表格段，用于控制台搜索框。
    * 形状规格见 docs/panels-interface.md。
    */
-  'panel.affinity': (args = {}) => {
-    const stats = providers['affinity.stats']();
+  'panel.affinity-snapshot': (args = {}) => {
+    const stats = providers['affinity-snapshot.stats']();
     if (!stats.ok) {
       return {
         title: '好感度',
@@ -440,7 +440,7 @@ export const providers = {
     // 控制台搜索：命中用表格段呈现（不返回内部字段名以外的任何东西）
     const q = String(args?.q ?? '').trim();
     if (q) {
-      const people = providers['affinity.people']({ q, limit: 50 });
+      const people = providers['affinity-snapshot.people']({ q, limit: 50 });
       if (!people.ok) {
         sections.push({ type: 'note', title: '搜索不可用', text: people.reason });
       } else {
@@ -506,6 +506,3 @@ export const hooks = {
 
 // 便于自测/控制台/其它模块调用
 export { injectFor, loadState, TIERS, TONE_MAP, tierIdOf };
-
-
-
